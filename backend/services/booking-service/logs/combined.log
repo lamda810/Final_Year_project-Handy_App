@@ -74,3 +74,7 @@
 {"level":"info","message":"Background jobs initialized","service":"handy-go","timestamp":"2026-02-19 23:29:13"}
 {"level":"info","message":"Booking Service running on port 3003","service":"handy-go","timestamp":"2026-02-19 23:29:13"}
 {"level":"info","message":"Environment: development","service":"handy-go","timestamp":"2026-02-19 23:29:13"}
+{"level":"info","message":"Connected to MongoDB","service":"handy-go","timestamp":"2026-04-26 21:46:42"}
+{"level":"info","message":"Background jobs initialized","service":"handy-go","timestamp":"2026-04-26 21:46:42"}
+{"level":"info","message":"Booking Service running on port 3003","service":"handy-go","timestamp":"2026-04-26 21:46:42"}
+{"level":"info","message":"Environment: development","service":"handy-go","timestamp":"2026-04-26 21:46:42"}

@@ -27,11 +27,14 @@ import 'domain/repositories/auth_repository.dart';
 import 'domain/repositories/booking_repository.dart';
 import 'domain/repositories/user_repository.dart';
 import 'domain/repositories/notification_repository.dart';
+import 'domain/repositories/matching_repository.dart';
 
 import 'presentation/blocs/auth/auth_bloc.dart';
 import 'presentation/blocs/booking/booking_bloc.dart';
 import 'presentation/blocs/user/user_bloc.dart';
 import 'presentation/blocs/notification/notification_bloc.dart';
+import 'presentation/blocs/chatbot/chatbot_bloc.dart';
+import 'data/repositories/matching_repository_impl.dart';
 
 import 'package:dio/dio.dart';
 import 'core/network/dio_client.dart';
@@ -139,6 +142,10 @@ Future<void> initializeDependencies() async {
     ),
   );
 
+  sl.registerLazySingleton<MatchingRepository>(
+    () => MatchingRepositoryImpl(dio: sl<DioClient>().dio),
+  );
+
   // BLoCs
   sl.registerFactory<AuthBloc>(
     () => AuthBloc(authRepository: sl<AuthRepository>()),
@@ -155,5 +162,9 @@ Future<void> initializeDependencies() async {
   sl.registerFactory<NotificationBloc>(
     () =>
         NotificationBloc(notificationRepository: sl<NotificationRepository>()),
+  );
+
+  sl.registerFactory<ChatbotBloc>(
+    () => ChatbotBloc(matchingRepository: sl<MatchingRepository>()),
   );
 }

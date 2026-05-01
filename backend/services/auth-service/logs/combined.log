@@ -88,3 +88,5 @@
 {"level":"info","message":"[DEV] OTP for +923022389814: 372441","service":"handy-go","timestamp":"2026-02-19 23:48:29"}
 {"level":"info","message":"[DEV MODE] SMS to +923022389814: Your Handy Go verification code is: 574048. Valid for 5 minutes. Do not share this code with anyone.","service":"handy-go","timestamp":"2026-02-19 23:51:24"}
 {"level":"info","message":"[DEV] OTP for +923022389814: 574048","service":"handy-go","timestamp":"2026-02-19 23:51:24"}
+{"level":"warn","message":"Twilio not configured - SMS will be logged instead of sent","service":"handy-go","timestamp":"2026-04-26 21:46:42"}
+{"level":"info","message":"Connected to MongoDB","service":"handy-go","timestamp":"2026-04-26 21:46:42"}

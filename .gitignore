@@ -1,1 +1,12 @@
 node_modules
+.env
+logs/
+*.log
+dist/
+build/
+.vscode/
+.idea/
+*.exe
+*.dll
+*.so
+*.dylib

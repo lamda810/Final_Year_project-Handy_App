@@ -6,4 +6,5 @@ export { SOS, ISOS, ISOSModel, IInitiator, IEvidence, IResolution, ISOSTimelineE
 export { Notification, INotification, INotificationModel } from './Notification.js';
 export { Review, IReview, IReviewModel, ICategoryRatings } from './Review.js';
 export { OTP, IOTP, IOTPModel } from './OTP.js';
+export { TokenBlacklist, ITokenBlacklist, ITokenBlacklistModel } from './TokenBlacklist.js';
 //# sourceMappingURL=index.d.ts.map

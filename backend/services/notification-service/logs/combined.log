@@ -109,3 +109,9 @@
 {"level":"info","message":"Connected to MongoDB","service":"handy-go","timestamp":"2026-02-19 23:30:06"}
 {"level":"info","message":"Notification service running on port 3005","service":"handy-go","timestamp":"2026-02-19 23:30:06"}
 {"level":"info","message":"Environment: development","service":"handy-go","timestamp":"2026-02-19 23:30:06"}
+{"level":"warn","message":"Firebase credentials not configured - push notifications disabled","service":"handy-go","timestamp":"2026-04-26 21:46:41"}
+{"level":"warn","message":"Twilio credentials not configured - SMS notifications disabled","service":"handy-go","timestamp":"2026-04-26 21:46:42"}
+{"level":"warn","message":"Email credentials not configured - email notifications disabled","service":"handy-go","timestamp":"2026-04-26 21:46:42"}
+{"level":"info","message":"Connected to MongoDB","service":"handy-go","timestamp":"2026-04-26 21:46:42"}
+{"level":"info","message":"Notification service running on port 3005","service":"handy-go","timestamp":"2026-04-26 21:46:42"}
+{"level":"info","message":"Environment: development","service":"handy-go","timestamp":"2026-04-26 21:46:42"}

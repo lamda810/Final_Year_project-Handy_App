@@ -1,11 +1,16 @@
 import { SERVICE_CATEGORIES, ServiceCategory } from '@handy-go/shared';
 import serviceKeywords from '../data/service-keywords.json' with { type: 'json' };
+import OpenAI from 'openai';
+
+const openai = new OpenAI({
+  apiKey: process.env.OPENAI_API_KEY || ''
+});
 
 export interface ProblemAnalysisResult {
   detectedServices: string[];
   confidence: number;
   suggestedQuestions: string[];
-  urgencyLevel: 'LOW' | 'MEDIUM' | 'HIGH';
+  urgencyLevel: 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL_SOS';
   matchedKeywords: string[];
   matchedPatterns: string[];
 }
@@ -29,10 +34,10 @@ const typedServiceKeywords = serviceKeywords as ServiceKeywordsType;
 /**
  * Analyze problem description to detect services and urgency
  */
-export const analyzeProblem = (
+export const analyzeProblem = async (
   problemDescription: string,
   providedCategory?: string
-): ProblemAnalysisResult => {
+): Promise<ProblemAnalysisResult> => {
   const text = problemDescription.toLowerCase().trim();
   const words = text.split(/\s+/);
 
@@ -106,21 +111,54 @@ export const analyzeProblem = (
 
   // Calculate confidence
   const maxPossibleScore = 50; // Rough estimate
-  const confidence = topCategory
+  let confidence = topCategory
     ? Math.min(1, topCategory[1].score / maxPossibleScore + 0.3)
     : 0.1;
 
-  // Determine urgency
-  const urgencyLevel = determineUrgency(text, detectedServices[0]);
+  let finalDetectedServices = detectedServices.length > 0 ? detectedServices : (providedCategory ? [providedCategory] : []);
+  let finalUrgencyLevel = determineUrgency(text, finalDetectedServices[0]);
+  let finalSuggestedQuestions = generateSuggestedQuestions(finalDetectedServices[0], text);
 
-  // Generate suggested questions
-  const suggestedQuestions = generateSuggestedQuestions(detectedServices[0], text);
+  // AI Hybrid Fallback (for Roman Urdu & Complex Logic)
+  if (confidence < 0.6 && process.env.OPENAI_API_KEY) {
+    try {
+      const prompt = `You are a helpful assistant for a home services platform. 
+We have the following categories: ${SERVICE_CATEGORIES.join(', ')}.
+A user just sent this problem description (it may be in English, Urdu, or Roman Urdu):
+"${problemDescription}"
+
+Please analyze this text and return a JSON with the following structure exactly:
+{
+  "detectedServices": ["CATEGORY_NAME_HERE"],
+  "confidence": 0.85,
+  "urgencyLevel": "LOW",
+  "suggestedQuestions": ["Specific clarification question 1?", "Specific clarification question 2?"]
+}
+If you're not fully sure what they mean, use suggestedQuestions to ask what they meant. Make sure urgencyLevel is LOW, MEDIUM, HIGH, or CRITICAL_SOS. Use CRITICAL_SOS ONLY if there is an immediate danger to life or property (e.g., gas leak, wire short circuit, active fire).`;
+
+      const response = await openai.chat.completions.create({
+        model: 'gpt-3.5-turbo',
+        messages: [{ role: 'user', content: prompt }],
+        response_format: { type: 'json_object' }
+      });
+
+      if (response.choices && response.choices.length > 0 && response.choices[0]?.message?.content) {
+        const aiData = JSON.parse(response.choices[0].message.content);
+        finalDetectedServices = aiData.detectedServices && aiData.detectedServices.length > 0 ? aiData.detectedServices : finalDetectedServices;
+        confidence = typeof aiData.confidence === 'number' ? aiData.confidence : confidence;
+        finalUrgencyLevel = aiData.urgencyLevel || finalUrgencyLevel;
+        finalSuggestedQuestions = aiData.suggestedQuestions && aiData.suggestedQuestions.length > 0 ? aiData.suggestedQuestions : finalSuggestedQuestions;
+      }
+    } catch (error) {
+      console.error('OpenAI Fallback failed:', error);
+    }
+  }
 
   return {
-    detectedServices: detectedServices.length > 0 ? detectedServices : (providedCategory ? [providedCategory] : []),
+    detectedServices: finalDetectedServices,
     confidence: Math.round(confidence * 100) / 100,
-    suggestedQuestions,
-    urgencyLevel,
+    suggestedQuestions: finalSuggestedQuestions,
+    urgencyLevel: finalUrgencyLevel,
     matchedKeywords: [...new Set(matchedKeywords)],
     matchedPatterns: [...new Set(matchedPatterns)],
   };
@@ -129,12 +167,20 @@ export const analyzeProblem = (
 /**
  * Determine urgency level based on keywords
  */
-const determineUrgency = (text: string, category?: string): 'LOW' | 'MEDIUM' | 'HIGH' => {
+const determineUrgency = (text: string, category?: string): 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL_SOS' => {
+  // SOS Critical life/property danger indicators
+  const sosIndicators = ['gas leak', 'wire short', 'short circuit', 'sparking', 'fire', 'smoke', 'burst pipe flooding'];
+  
   // General urgency indicators
   const generalHighUrgency = ['urgent', 'emergency', 'immediately', 'asap', 'right now', 'critical'];
   const generalMediumUrgency = ['soon', 'today', 'quickly', 'fast'];
 
-  // Check general urgency first
+  // Check SOS first (highest priority)
+  for (const indicator of sosIndicators) {
+    if (text.includes(indicator)) return 'CRITICAL_SOS';
+  }
+
+  // Check general urgency
   for (const indicator of generalHighUrgency) {
     if (text.includes(indicator)) return 'HIGH';
   }

@@ -23,7 +23,8 @@
     "joi": "^17.11.0",
     "jsonwebtoken": "^9.0.2",
     "mongoose": "^8.0.3",
-    "natural": "^6.10.4"
+    "natural": "^6.10.4",
+    "openai": "^6.34.0"
   },
   "devDependencies": {
     "@types/cors": "^2.8.17",

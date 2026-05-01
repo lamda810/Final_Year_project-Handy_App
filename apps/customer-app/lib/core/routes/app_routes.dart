@@ -25,6 +25,7 @@ import '../../presentation/screens/profile/notification_settings_screen.dart';
 import '../../presentation/screens/profile/wallet_screen.dart';
 import '../../presentation/screens/profile/payment_methods_screen.dart';
 import '../../presentation/screens/profile/saved_addresses_screen.dart';
+import '../../presentation/screens/chat/ai_assistant_screen.dart';
 
 /// App route names
 class AppRoutes {
@@ -54,6 +55,7 @@ class AppRoutes {
   static const String bookingTracking = '/booking/tracking';
   static const String rating = '/booking/rating';
   static const String chat = '/chat';
+  static const String aiAssistant = '/ai-assistant';
   static const String sos = '/sos';
 
   // Profile routes
@@ -171,6 +173,9 @@ class AppRouter {
           ),
           settings,
         );
+
+      case AppRoutes.aiAssistant:
+        return _buildRoute(const AIAssistantScreen(), settings);
 
       case AppRoutes.sos:
         final args = settings.arguments as Map<String, dynamic>?;

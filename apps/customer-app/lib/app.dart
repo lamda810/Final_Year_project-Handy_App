@@ -12,6 +12,7 @@ import 'presentation/blocs/auth/auth_state.dart';
 import 'presentation/blocs/booking/booking_bloc.dart';
 import 'presentation/blocs/user/user_bloc.dart';
 import 'presentation/blocs/notification/notification_bloc.dart';
+import 'presentation/blocs/chatbot/chatbot_bloc.dart';
 
 /// Main application widget for Handy Go Customer App
 class HandyGoApp extends StatefulWidget {
@@ -40,6 +41,7 @@ class _HandyGoAppState extends State<HandyGoApp> {
         BlocProvider<BookingBloc>(create: (_) => sl<BookingBloc>()),
         BlocProvider<UserBloc>(create: (_) => sl<UserBloc>()),
         BlocProvider<NotificationBloc>(create: (_) => sl<NotificationBloc>()),
+        BlocProvider<ChatbotBloc>(create: (_) => sl<ChatbotBloc>()),
       ],
       child: BlocListener<AuthBloc, AuthState>(
         listener: (context, state) {

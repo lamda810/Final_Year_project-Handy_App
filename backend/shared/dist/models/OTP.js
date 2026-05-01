@@ -80,8 +80,9 @@ otpSchema.methods.incrementAttempts = async function () {
 otpSchema.statics.createOTP = async function (phone, purpose) {
     // Invalidate any existing OTPs for this phone and purpose
     await this.invalidateOTPs(phone, purpose);
-    // Generate 6-digit OTP
-    const code = Math.floor(100000 + Math.random() * 900000).toString();
+    // Generate 6-digit OTP using cryptographically secure random
+    const { randomInt } = await import('crypto');
+    const code = randomInt(100000, 999999).toString();
     // Calculate expiry time
     const expiresAt = new Date();
     expiresAt.setMinutes(expiresAt.getMinutes() + DEFAULTS.OTP_EXPIRY_MINUTES);
