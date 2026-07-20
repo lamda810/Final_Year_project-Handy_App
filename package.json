@@ -17,7 +17,7 @@
     "backend:dev:full": "pnpm --filter @handy-go/shared build && concurrently \"pnpm --filter @handy-go/api-gateway exec tsx src/index.ts\" \"pnpm -r --parallel --filter './backend/services/*' exec tsx src/index.ts\"",
     "backend:dev:full:watch": "pnpm --filter @handy-go/shared build && concurrently \"pnpm --filter @handy-go/shared run dev\" \"pnpm --filter @handy-go/api-gateway run dev\" \"pnpm -r --parallel --filter './backend/services/*' run dev\"",
     "backend:seed": "pnpm --filter @handy-go/shared build && pnpm --filter @handy-go/scripts run seed",
-    "backend:start": "concurrently \"pnpm --filter @handy-go/api-gateway run start\" \"pnpm -r --parallel --filter './backend/services/*' run start\"",
+    "backend:start": "pnpm --filter @handy-go/api-gateway run start",
     "build": "pnpm -r run build",
     "test": "pnpm -r run test",
     "lint": "pnpm -r run lint",

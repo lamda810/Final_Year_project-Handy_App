@@ -5,9 +5,9 @@ import morgan from 'morgan';
 import compression from 'compression';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import mongoose from 'mongoose';
 import { logger } from '@handy-go/shared';
 import { config } from './config/index.js';
-import { serviceRoutes } from './config/routes.js';
 import { authenticate } from './middleware/auth.js';
 import uploadRoutes from './routes/upload.routes.js';
 
@@ -25,8 +25,27 @@ import {
   securityHeaders,
   handlePreflight,
 } from './middleware/common.js';
-import { setupProxies } from './middleware/proxy.js';
 import { createLocalDevProtectedRouter, createLocalDevPublicRouter } from './local-dev/router.js';
+
+// Every microservice's routes, mounted directly in-process instead of
+// proxied over HTTP to separate servers. This exists because running 7
+// separate Node processes (gateway + 6 services) exceeded Render's
+// free-tier 512MB memory limit — one process with one shared MongoDB
+// connection fits comfortably and removes an entire class of proxy bugs
+// (body/Content-Length forwarding) this project had already hit once.
+import authRoutes from '@handy-go/auth-service/dist/routes/auth.routes.js';
+import userCustomerRoutes from '@handy-go/user-service/dist/routes/customer.routes.js';
+import userWorkerRoutes from '@handy-go/user-service/dist/routes/worker.routes.js';
+import userAdminRoutes from '@handy-go/user-service/dist/routes/admin.routes.js';
+import bookingWorkerRoutes from '@handy-go/booking-service/dist/routes/worker.routes.js';
+import bookingAdminRoutes from '@handy-go/booking-service/dist/routes/admin.routes.js';
+import bookingChatRoutes from '@handy-go/booking-service/dist/routes/chat.routes.js';
+import bookingCustomerRoutes from '@handy-go/booking-service/dist/routes/customer.routes.js';
+import matchingRoutes from '@handy-go/matching-service/dist/routes/matching.routes.js';
+import notificationRoutes from '@handy-go/notification-service/dist/routes/notification.routes.js';
+import sosRoutes from '@handy-go/sos-service/dist/routes/sos.routes.js';
+import { initializeBackgroundJobs as initBookingJobs } from '@handy-go/booking-service/dist/jobs/booking.jobs.js';
+import { startAllJobs as startSosJobs } from '@handy-go/sos-service/dist/jobs/sos.jobs.js';
 
 const app: Application = express();
 
@@ -88,14 +107,7 @@ app.get('/health', (req, res) => {
     timestamp: new Date().toISOString(),
     environment: config.nodeEnv,
     node_env: process.env.NODE_ENV,
-    services: Object.entries(config.services).map(([name, url]) => ({
-      name,
-      url,
-    })),
-    debug: {
-      has_auth_url: !!process.env.AUTH_SERVICE_URL,
-      auth_url_value: process.env.AUTH_SERVICE_URL || 'MISSING',
-    }
+    mongodb: mongoose.connection.readyState === 1 ? 'connected' : 'disconnected',
   });
 });
 
@@ -137,17 +149,30 @@ if (config.localDevMode) {
 
 // ==================== File Uploads ====================
 
-// Handled directly in the gateway (not proxied) — multipart/form-data
-// bodies through http-proxy-middleware have already been a source of
-// bugs here (see the Content-Length fix in proxy.ts), so avoid that
-// path entirely for file uploads.
+// Handled directly in the gateway — multipart/form-data bodies through
+// http-proxy-middleware have already been a source of bugs here.
 app.use('/api/uploads', uploadRoutes);
 
-// ==================== Service Proxies ====================
+// ==================== Service Routes ====================
 
-// Set up proxies to microservices
 if (!config.localDevMode) {
-  setupProxies(app);
+  app.use('/api/auth', authRoutes);
+
+  app.use('/api/users/customer', userCustomerRoutes);
+  app.use('/api/users/worker', userWorkerRoutes);
+  app.use('/api/users/admin', userAdminRoutes);
+
+  // Specific prefixes must be mounted before the customer router: it is
+  // mounted at /api/bookings with router-level authorize('CUSTOMER'),
+  // which would 403 worker/admin requests before their routers are reached.
+  app.use('/api/bookings/worker', bookingWorkerRoutes);
+  app.use('/api/bookings/admin', bookingAdminRoutes);
+  app.use('/api/bookings', bookingChatRoutes);
+  app.use('/api/bookings', bookingCustomerRoutes);
+
+  app.use('/api/matching', matchingRoutes);
+  app.use('/api/notifications', notificationRoutes);
+  app.use('/api/sos', sosRoutes);
 }
 
 // ==================== 404 Handler ====================
@@ -171,7 +196,6 @@ app.use((err: any, req: Request, res: Response, next: NextFunction) => {
     method: req.method,
   });
 
-  // Guard: proxy onError may have already sent a response
   if (res.headersSent) {
     return next(err);
   }
@@ -187,15 +211,20 @@ app.use((err: any, req: Request, res: Response, next: NextFunction) => {
 
 // ==================== Server Start ====================
 
-const startServer = () => {
+const startServer = async () => {
+  if (!config.localDevMode) {
+    await mongoose.connect(config.mongodbUri);
+    logger.info('Connected to MongoDB');
+
+    initBookingJobs();
+    startSosJobs();
+    logger.info('Background jobs initialized');
+  }
+
   const server = app.listen(config.port, () => {
     logger.info(`🚀 API Gateway running on port ${config.port}`);
     logger.info(`Environment: ${config.nodeEnv}`);
     logger.info(`Local dev mode: ${config.localDevMode ? 'enabled' : 'disabled'}`);
-    logger.info('Configured services:');
-    Object.entries(config.services).forEach(([name, url]) => {
-      logger.info(`  - ${name}: ${url}`);
-    });
     logger.info('Server is now listening for connections...');
   });
 
@@ -235,8 +264,9 @@ process.on('uncaughtException', (error) => {
 });
 
 // Graceful shutdown
-process.on('SIGTERM', () => {
+process.on('SIGTERM', async () => {
   logger.info('SIGTERM received. Shutting down gracefully...');
+  await mongoose.connection.close();
   process.exit(0);
 });
 
