@@ -515,3 +515,4 @@
 {"ip":"::1","level":"info","message":"PUT /api/notifications/6a5d05ff97f1c64467d50593/read","service":"handy-go","timestamp":"2026-07-19 23:08:26","userAgent":"Dart/3.12 (dart:io)"}
 {"ip":"::1","level":"info","message":"GET /api/notifications","service":"handy-go","timestamp":"2026-07-20 12:14:47","userAgent":"Dart/3.12 (dart:io)"}
 {"ip":"::1","level":"info","message":"GET /api/notifications/unread-count","service":"handy-go","timestamp":"2026-07-20 12:14:47","userAgent":"Dart/3.12 (dart:io)"}
+{"ip":"::1","level":"info","message":"POST /api/notifications/send","service":"handy-go","timestamp":"2026-07-20 19:00:00","userAgent":"axios/1.13.2"}
