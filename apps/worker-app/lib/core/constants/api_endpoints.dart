@@ -1,32 +1,17 @@
-import 'dart:io' show Platform;
-
-import 'package:flutter/foundation.dart';
-
 class ApiEndpoints {
   static const String _configuredBaseUrl = String.fromEnvironment(
     'API_BASE_URL',
     defaultValue: '',
   );
 
-  // ngrok tunnel to the local backend (port 3000), used for testing on a
-  // real device over WiFi instead of the Android emulator's 10.0.2.2 alias.
-  // Free-tier ngrok URLs change every time the tunnel restarts — if
-  // requests stop reaching the backend, get the current URL from
-  // `curl http://localhost:4040/api/tunnels` and update this constant.
-  static const String _ngrokBaseUrl =
-      'https://turniplike-snarkily-alita.ngrok-free.dev/api';
+  // Deployed backend on Render — stable, no ngrok/tunnel needed anymore.
+  // To point at a local backend instead, run with
+  // --dart-define=API_BASE_URL=http://localhost:3000/api (or 10.0.2.2 for
+  // the Android emulator) rather than editing this constant.
+  static const String _renderBaseUrl =
+      'https://final-year-project-handy-app.onrender.com/api';
 
-  static String get _defaultLocalBaseUrl {
-    if (kIsWeb) {
-      return 'http://localhost:3000/api';
-    }
-
-    if (Platform.isAndroid) {
-      return _ngrokBaseUrl;
-    }
-
-    return 'http://localhost:3000/api';
-  }
+  static String get _defaultLocalBaseUrl => _renderBaseUrl;
 
   static String get baseUrl =>
       _configuredBaseUrl.isNotEmpty ? _configuredBaseUrl : _defaultLocalBaseUrl;
