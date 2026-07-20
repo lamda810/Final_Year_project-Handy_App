@@ -17,7 +17,7 @@ export const getProfile = asyncHandler(async (req, res) => {
  */
 export const updateProfile = asyncHandler(async (req, res) => {
     const userId = req.user.id;
-    const { firstName, lastName, email, profileImage, skills, serviceRadius, availability, bankDetails } = req.body;
+    const { firstName, lastName, email, profileImage, contactPhone, skills, serviceRadius, availability, bankDetails } = req.body;
     const worker = await Worker.findOne({ user: userId });
     if (!worker) {
         return notFoundResponse(res, 'Worker profile not found');
@@ -29,6 +29,8 @@ export const updateProfile = asyncHandler(async (req, res) => {
         worker.lastName = lastName;
     if (profileImage)
         worker.profileImage = profileImage;
+    if (contactPhone !== undefined)
+        worker.contactPhone = contactPhone || undefined;
     if (skills) {
         worker.skills = skills.map((skill) => ({
             ...skill,

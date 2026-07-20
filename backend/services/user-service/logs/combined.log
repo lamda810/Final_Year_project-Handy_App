@@ -3710,3 +3710,11 @@
 {"ip":"::1","level":"info","message":"GET /api/users/customer/profile","service":"handy-go","timestamp":"2026-07-20 12:14:49","userAgent":"Dart/3.12 (dart:io)"}
 {"ip":"::1","level":"info","message":"GET /api/users/customer/profile","service":"handy-go","timestamp":"2026-07-20 12:15:00","userAgent":"Dart/3.12 (dart:io)"}
 {"ip":"::1","level":"info","message":"GET /api/users/customer/addresses","service":"handy-go","timestamp":"2026-07-20 15:02:18","userAgent":"Dart/3.12 (dart:io)"}
+{"level":"info","message":"SIGTERM received. Shutting down gracefully...","service":"handy-go","timestamp":"2026-07-20 21:21:50"}
+{"level":"info","message":"Connected to MongoDB","service":"handy-go","timestamp":"2026-07-20 21:21:56"}
+{"level":"info","message":"User Service running on port 3002","service":"handy-go","timestamp":"2026-07-20 21:21:56"}
+{"level":"info","message":"Environment: development","service":"handy-go","timestamp":"2026-07-20 21:21:56"}
+{"level":"info","message":"SIGTERM received. Shutting down gracefully...","service":"handy-go","timestamp":"2026-07-20 21:24:02"}
+{"level":"info","message":"Connected to MongoDB","service":"handy-go","timestamp":"2026-07-20 21:24:25"}
+{"level":"info","message":"User Service running on port 3002","service":"handy-go","timestamp":"2026-07-20 21:24:25"}
+{"level":"info","message":"Environment: development","service":"handy-go","timestamp":"2026-07-20 21:24:25"}

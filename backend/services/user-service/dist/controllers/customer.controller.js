@@ -17,7 +17,7 @@ export const getProfile = asyncHandler(async (req, res) => {
  */
 export const updateProfile = asyncHandler(async (req, res) => {
     const userId = req.user.id;
-    const { firstName, lastName, email, profileImage, preferredLanguage } = req.body;
+    const { firstName, lastName, email, profileImage, contactPhone, preferredLanguage } = req.body;
     const customer = await Customer.findOne({ user: userId });
     if (!customer) {
         return notFoundResponse(res, 'Customer profile not found');
@@ -29,6 +29,8 @@ export const updateProfile = asyncHandler(async (req, res) => {
         customer.lastName = lastName;
     if (profileImage)
         customer.profileImage = profileImage;
+    if (contactPhone !== undefined)
+        customer.contactPhone = contactPhone || undefined;
     if (preferredLanguage)
         customer.preferredLanguage = preferredLanguage;
     // Update email in User model if provided

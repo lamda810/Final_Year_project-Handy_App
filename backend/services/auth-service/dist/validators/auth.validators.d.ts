@@ -17,6 +17,7 @@ export declare const registerCustomerSchema: Joi.ObjectSchema<any>;
 export declare const registerWorkerSchema: Joi.ObjectSchema<any>;
 /**
  * Login validation schema
+ * Accepts either phone or email as the identifier.
  */
 export declare const loginSchema: Joi.ObjectSchema<any>;
 /**

@@ -328,3 +328,11 @@
 {"level":"info","message":"User logged in: +923001234567","service":"handy-go","timestamp":"2026-07-19 23:06:55"}
 {"code":21659,"level":"error","message":"Failed to send SMS 'From' +923146631398 is not a Twilio phone number or Short Code country mismatch","moreInfo":"https://www.twilio.com/docs/errors/21659","service":"handy-go","stack":"Error: 'From' +923146631398 is not a Twilio phone number or Short Code country mismatch\n    at success (/Users/user/Desktop/MY MAC DESKTOP/8th Semester/Final_Year_project-Handy_App/node_modules/.pnpm/twilio@4.23.0/node_modules/twilio/lib/base/Version.js:79:23)\n    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)\n    at async sendSMS (/Users/user/Desktop/MY MAC DESKTOP/8th Semester/Final_Year_project-Handy_App/backend/services/auth-service/src/services/otp.service.ts:47:5)\n    at async createAndSendOTP (/Users/user/Desktop/MY MAC DESKTOP/8th Semester/Final_Year_project-Handy_App/backend/services/auth-service/src/services/otp.service.ts:76:21)\n    at async <anonymous> (/Users/user/Desktop/MY MAC DESKTOP/8th Semester/Final_Year_project-Handy_App/backend/services/auth-service/src/controllers/auth.controller.ts:473:18)","status":400,"timestamp":"2026-07-20 12:14:02"}
 {"level":"info","message":"User logged in: +923009876543","service":"handy-go","timestamp":"2026-07-20 12:14:35"}
+{"level":"info","message":"SIGTERM received. Shutting down gracefully...","service":"handy-go","timestamp":"2026-07-20 21:21:50"}
+{"level":"info","message":"Connected to MongoDB","service":"handy-go","timestamp":"2026-07-20 21:21:56"}
+{"level":"info","message":"Auth service running on port 3001","service":"handy-go","timestamp":"2026-07-20 21:21:56"}
+{"level":"info","message":"Environment: development","service":"handy-go","timestamp":"2026-07-20 21:21:56"}
+{"level":"info","message":"SIGTERM received. Shutting down gracefully...","service":"handy-go","timestamp":"2026-07-20 21:24:02"}
+{"level":"info","message":"Connected to MongoDB","service":"handy-go","timestamp":"2026-07-20 21:24:25"}
+{"level":"info","message":"Auth service running on port 3001","service":"handy-go","timestamp":"2026-07-20 21:24:25"}
+{"level":"info","message":"Environment: development","service":"handy-go","timestamp":"2026-07-20 21:24:25"}

@@ -71,6 +71,14 @@ if (config.nodeEnv !== 'test') {
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true }));
 
+// ==================== Root ====================
+
+app.get('/', (req, res) => {
+  res.json({
+    message: 'Hello World from Handy Go API Gateway',
+  });
+});
+
 // ==================== Health Check ====================
 
 app.get('/health', (req, res) => {

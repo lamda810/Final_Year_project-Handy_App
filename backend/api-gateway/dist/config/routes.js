@@ -55,8 +55,13 @@ export const publicRoutes = [
     '/api/auth/refresh-token',
     '/api/auth/forgot-password',
     '/api/auth/reset-password',
+    '/',
     '/health',
     '/api/health',
+    // Uploaded files are served statically and referenced by URL from
+    // authenticated responses (e.g. booking images) — the URL itself is
+    // the access control, same as any other static asset host.
+    '/uploads',
 ];
 /**
  * Check if a route is public (doesn't require authentication)

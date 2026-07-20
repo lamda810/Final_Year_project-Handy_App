@@ -350,3 +350,17 @@
 {"ip":"::1","level":"info","message":"POST /api/sos/trigger","service":"handy-go","timestamp":"2026-07-19 22:14:39","userAgent":"Dart/3.12 (dart:io)"}
 {"level":"info","message":"SOS triggered","potentialFalseAlarm":false,"priority":"CRITICAL","service":"handy-go","sosId":"6a5d05ff9ef923684ae89ea3","timestamp":"2026-07-19 22:14:39","userId":"6a58929dbf6122de09280c43"}
 {"date":"2026-07-18","escalated":0,"falseAlarms":0,"level":"info","message":"Daily SOS Summary","resolved":0,"service":"handy-go","stillActive":1,"timestamp":"2026-07-20 00:00:00","total":1}
+{"level":"info","message":"SIGTERM received. Shutting down gracefully...","service":"handy-go","timestamp":"2026-07-20 21:21:50"}
+{"level":"info","message":"Connected to MongoDB","service":"handy-go","timestamp":"2026-07-20 21:21:56"}
+{"level":"info","message":"SOS auto-escalation job started","service":"handy-go","timestamp":"2026-07-20 21:21:56"}
+{"level":"info","message":"SOS reminder job started","service":"handy-go","timestamp":"2026-07-20 21:21:56"}
+{"level":"info","message":"Daily SOS summary job scheduled","service":"handy-go","timestamp":"2026-07-20 21:21:56"}
+{"level":"info","message":"SOS service running on port 3006","service":"handy-go","timestamp":"2026-07-20 21:21:56"}
+{"level":"info","message":"Environment: development","service":"handy-go","timestamp":"2026-07-20 21:21:56"}
+{"level":"info","message":"SIGTERM received. Shutting down gracefully...","service":"handy-go","timestamp":"2026-07-20 21:24:02"}
+{"level":"info","message":"Connected to MongoDB","service":"handy-go","timestamp":"2026-07-20 21:24:25"}
+{"level":"info","message":"SOS auto-escalation job started","service":"handy-go","timestamp":"2026-07-20 21:24:25"}
+{"level":"info","message":"SOS reminder job started","service":"handy-go","timestamp":"2026-07-20 21:24:25"}
+{"level":"info","message":"Daily SOS summary job scheduled","service":"handy-go","timestamp":"2026-07-20 21:24:25"}
+{"level":"info","message":"SOS service running on port 3006","service":"handy-go","timestamp":"2026-07-20 21:24:25"}
+{"level":"info","message":"Environment: development","service":"handy-go","timestamp":"2026-07-20 21:24:25"}

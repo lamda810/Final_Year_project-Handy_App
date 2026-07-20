@@ -516,3 +516,17 @@
 {"ip":"::1","level":"info","message":"GET /api/notifications","service":"handy-go","timestamp":"2026-07-20 12:14:47","userAgent":"Dart/3.12 (dart:io)"}
 {"ip":"::1","level":"info","message":"GET /api/notifications/unread-count","service":"handy-go","timestamp":"2026-07-20 12:14:47","userAgent":"Dart/3.12 (dart:io)"}
 {"ip":"::1","level":"info","message":"POST /api/notifications/send","service":"handy-go","timestamp":"2026-07-20 19:00:00","userAgent":"axios/1.13.2"}
+{"level":"info","message":"SIGTERM received. Shutting down gracefully...","service":"handy-go","timestamp":"2026-07-20 21:21:50"}
+{"level":"warn","message":"Firebase credentials not configured - push notifications disabled","service":"handy-go","timestamp":"2026-07-20 21:21:56"}
+{"level":"info","message":"Twilio client initialized","service":"handy-go","timestamp":"2026-07-20 21:21:56"}
+{"level":"warn","message":"Email credentials not configured - email notifications disabled","service":"handy-go","timestamp":"2026-07-20 21:21:56"}
+{"level":"info","message":"Connected to MongoDB","service":"handy-go","timestamp":"2026-07-20 21:21:56"}
+{"level":"info","message":"Notification service running on port 3005","service":"handy-go","timestamp":"2026-07-20 21:21:56"}
+{"level":"info","message":"Environment: development","service":"handy-go","timestamp":"2026-07-20 21:21:56"}
+{"level":"info","message":"SIGTERM received. Shutting down gracefully...","service":"handy-go","timestamp":"2026-07-20 21:24:02"}
+{"level":"warn","message":"Firebase credentials not configured - push notifications disabled","service":"handy-go","timestamp":"2026-07-20 21:24:25"}
+{"level":"info","message":"Twilio client initialized","service":"handy-go","timestamp":"2026-07-20 21:24:25"}
+{"level":"warn","message":"Email credentials not configured - email notifications disabled","service":"handy-go","timestamp":"2026-07-20 21:24:25"}
+{"level":"info","message":"Connected to MongoDB","service":"handy-go","timestamp":"2026-07-20 21:24:25"}
+{"level":"info","message":"Notification service running on port 3005","service":"handy-go","timestamp":"2026-07-20 21:24:25"}
+{"level":"info","message":"Environment: development","service":"handy-go","timestamp":"2026-07-20 21:24:25"}

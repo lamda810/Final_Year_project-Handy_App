@@ -44,7 +44,10 @@ export const startJobSchema = Joi.object({
 });
 export const completeJobSchema = Joi.object({
     afterImages: Joi.array().items(Joi.string().uri()).max(5),
-    finalPrice: Joi.number().min(0).required(),
+    // Optional now — the price is decided at booking creation and the
+    // worker no longer re-enters it; the controller falls back to
+    // booking.pricing.estimatedPrice when this is omitted.
+    finalPrice: Joi.number().min(0),
     materialsCost: Joi.number().min(0).default(0),
     notes: Joi.string().max(500).trim(),
 });
@@ -65,5 +68,8 @@ export const adminQuerySchema = Joi.object({
     endDate: Joi.date().iso().min(Joi.ref('startDate')),
     page: Joi.number().min(1).default(1),
     limit: Joi.number().min(1).max(100).default(20),
+});
+export const sendMessageSchema = Joi.object({
+    message: Joi.string().min(1).max(2000).required().trim(),
 });
 //# sourceMappingURL=booking.validators.js.map

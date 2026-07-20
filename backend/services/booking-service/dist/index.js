@@ -9,6 +9,7 @@ import { initializeBackgroundJobs } from './jobs/booking.jobs.js';
 import customerRoutes from './routes/customer.routes.js';
 import workerRoutes from './routes/worker.routes.js';
 import adminRoutes from './routes/admin.routes.js';
+import chatRoutes from './routes/chat.routes.js';
 // Create Express app
 const app = express();
 // Security middleware
@@ -38,12 +39,19 @@ app.get('/health', (req, res) => {
     });
 });
 // API routes
-// Customer routes - booking creation, viewing, cancellation, rating
-app.use('/api/bookings', customerRoutes);
+// Specific prefixes must be mounted before the customer router: it is mounted
+// at /api/bookings with router-level authorize('CUSTOMER'), which would 403
+// worker/admin requests before their routers are ever reached.
 // Worker routes - booking management (accept, reject, start, complete)
 app.use('/api/bookings/worker', workerRoutes);
 // Admin routes - booking administration
 app.use('/api/bookings/admin', adminRoutes);
+// Shared customer+worker routes (booking details, per-booking chat); must
+// precede the customer router, whose router-level authorize('CUSTOMER')
+// would 403 workers before these routes are reached.
+app.use('/api/bookings', chatRoutes);
+// Customer routes - booking creation, viewing, cancellation, rating
+app.use('/api/bookings', customerRoutes);
 // 404 handler
 app.use(notFoundHandler);
 // Global error handler

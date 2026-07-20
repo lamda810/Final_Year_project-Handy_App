@@ -10,4 +10,5 @@ export declare const completeJobSchema: Joi.ObjectSchema<any>;
 export declare const updateLocationSchema: Joi.ObjectSchema<any>;
 export declare const adminUpdateBookingSchema: Joi.ObjectSchema<any>;
 export declare const adminQuerySchema: Joi.ObjectSchema<any>;
+export declare const sendMessageSchema: Joi.ObjectSchema<any>;
 //# sourceMappingURL=booking.validators.d.ts.map
