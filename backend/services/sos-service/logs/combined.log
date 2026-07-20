@@ -364,3 +364,4 @@
 {"level":"info","message":"Daily SOS summary job scheduled","service":"handy-go","timestamp":"2026-07-20 21:24:25"}
 {"level":"info","message":"SOS service running on port 3006","service":"handy-go","timestamp":"2026-07-20 21:24:25"}
 {"level":"info","message":"Environment: development","service":"handy-go","timestamp":"2026-07-20 21:24:25"}
+{"level":"info","message":"SIGTERM received. Shutting down gracefully...","service":"handy-go","timestamp":"2026-07-21 00:51:20"}

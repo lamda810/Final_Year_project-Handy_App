@@ -1,48 +1,3 @@
-import { config } from '../config/index.js';
-export const serviceRoutes = [
-    // Authentication Service Routes
-    {
-        path: '/api/auth',
-        target: config.services.auth,
-        requiresAuth: false,
-        rateLimit: 'auth',
-    },
-    // User Service Routes
-    {
-        path: '/api/users',
-        target: config.services.user,
-        requiresAuth: true,
-        rateLimit: 'authenticated',
-    },
-    // Booking Service Routes
-    {
-        path: '/api/bookings',
-        target: config.services.booking,
-        requiresAuth: true,
-        rateLimit: 'authenticated',
-    },
-    // Matching Service Routes
-    {
-        path: '/api/matching',
-        target: config.services.matching,
-        requiresAuth: true,
-        rateLimit: 'authenticated',
-    },
-    // Notification Service Routes
-    {
-        path: '/api/notifications',
-        target: config.services.notification,
-        requiresAuth: true,
-        rateLimit: 'authenticated',
-    },
-    // SOS Service Routes
-    {
-        path: '/api/sos',
-        target: config.services.sos,
-        requiresAuth: true,
-        rateLimit: 'sos',
-    },
-];
 /**
  * Public routes that don't require authentication
  */
@@ -62,6 +17,19 @@ export const publicRoutes = [
     // authenticated responses (e.g. booking images) — the URL itself is
     // the access control, same as any other static asset host.
     '/uploads',
+    // Internal service-to-service endpoints, protected by their own
+    // authenticateService (X-Service-Key) check at the router level rather
+    // than a client JWT. Before all services were merged into this one
+    // process, these calls (e.g. sos-service -> notification-service) went
+    // directly between separate servers and never touched the gateway's
+    // JWT check at all — now that they're routed through the same app,
+    // they need this exemption to keep working the same way.
+    '/api/notifications/send',
+    '/api/notifications/send-templated',
+    '/api/notifications/send-bulk',
+    '/api/matching/calculate-trust-score',
+    '/api/matching/update-trust-score',
+    '/api/matching/auto-replace-worker',
 ];
 /**
  * Check if a route is public (doesn't require authentication)
@@ -71,11 +39,5 @@ export const isPublicRoute = (path) => {
         // Exact match or starts with (for patterns like /api/auth/*)
         return path === route || path.startsWith(route + '/');
     });
-};
-/**
- * Get the service configuration for a given path
- */
-export const getServiceForPath = (path) => {
-    return serviceRoutes.find(route => path.startsWith(route.path));
 };
 //# sourceMappingURL=routes.js.map

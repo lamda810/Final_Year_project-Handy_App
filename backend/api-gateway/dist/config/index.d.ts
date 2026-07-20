@@ -2,20 +2,13 @@ export declare const config: {
     port: number;
     nodeEnv: string;
     localDevMode: boolean;
+    mongodbUri: string;
     jwt: {
         secret: string;
     };
     corsOrigins: string[];
     redis: {
         url: string;
-    };
-    services: {
-        auth: string;
-        user: string;
-        booking: string;
-        matching: string;
-        notification: string;
-        sos: string;
     };
     rateLimiting: {
         general: {

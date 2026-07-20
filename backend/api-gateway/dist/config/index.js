@@ -5,10 +5,30 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 // Load .env from the root of handy-go
 dotenv.config({ path: resolve(__dirname, '../../../../.env') });
+// Every microservice's routes are now mounted directly in this same
+// process (see index.ts) instead of being proxied to separate servers.
+// Some services still make internal HTTP calls to "other services" for
+// notifications/matching/user lookups (e.g. booking-service calling
+// notification-service) — those must now unconditionally resolve back to
+// this same process's own port, overriding whatever the shared .env file
+// says (it still hardcodes the old per-service ports for standalone
+// local-dev use, which never loads this file at all). This runs before
+// this module's `import`s further down the entry point pull in those
+// services' route modules (which read these vars at import time), so
+// the override is already in place by the time they do.
+const selfServiceUrl = `http://localhost:${process.env.PORT || 3000}`;
+process.env.MATCHING_SERVICE_URL = selfServiceUrl;
+process.env.NOTIFICATION_SERVICE_URL = selfServiceUrl;
+process.env.USER_SERVICE_URL = selfServiceUrl;
 export const config = {
     port: parseInt(process.env.PORT || '3000', 10),
     nodeEnv: process.env.NODE_ENV || 'production',
     localDevMode: process.env.LOCAL_DEV_MODE === 'true',
+    // MongoDB — the gateway now owns the single shared connection used by
+    // every microservice's routes, which are mounted directly in-process
+    // (see index.ts) instead of being proxied to separate servers.
+    mongodbUri: process.env.MONGODB_URI ||
+        'mongodb://handygo_app:handygo_app_password@localhost:27017/handygo?authSource=handygo',
     jwt: {
         secret: process.env.JWT_SECRET || 'your-super-secret-jwt-key-change-in-production',
     },
@@ -21,15 +41,6 @@ export const config = {
     // Redis configuration for rate limiting and caching
     redis: {
         url: process.env.REDIS_URL || 'redis://localhost:6379',
-    },
-    // Microservice URLs
-    services: {
-        auth: process.env.AUTH_SERVICE_URL || 'http://localhost:3001',
-        user: process.env.USER_SERVICE_URL || 'http://localhost:3002',
-        booking: process.env.BOOKING_SERVICE_URL || 'http://localhost:3003',
-        matching: process.env.MATCHING_SERVICE_URL || 'http://localhost:3004',
-        notification: process.env.NOTIFICATION_SERVICE_URL || 'http://localhost:3005',
-        sos: process.env.SOS_SERVICE_URL || 'http://localhost:3006',
     },
     // Rate limiting configuration
     rateLimiting: {
