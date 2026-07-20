@@ -1,0 +1,22 @@
+{
+  "name": "@handy-go/scripts",
+  "version": "1.0.0",
+  "description": "One-off maintenance scripts for the Handy Go backend (e.g. DB seeding)",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "seed": "tsx seed.ts"
+  },
+  "dependencies": {
+    "@handy-go/shared": "workspace:*",
+    "dotenv": "^16.3.1",
+    "mongoose": "^8.0.3"
+  },
+  "devDependencies": {
+    "@types/node": "^20.10.5",
+    "tsx": "^4.7.0",
+    "typescript": "^5.3.3"
+  },
+  "author": "Handy Go Team",
+  "license": "UNLICENSED"
+}

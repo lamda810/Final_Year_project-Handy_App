@@ -140,9 +140,18 @@ class AuthRemoteDataSourceImpl implements AuthRemoteDataSource {
         ApiEndpoints.resetPassword,
         data: {
           'tempToken': tempToken,
-          'password': newPassword,
+          'newPassword': newPassword,
         },
       );
+    } on DioException catch (e) {
+      throw _handleDioError(e);
+    }
+  }
+
+  @override
+  Future<void> logout() async {
+    try {
+      await _dio.post(ApiEndpoints.logout);
     } on DioException catch (e) {
       throw _handleDioError(e);
     }

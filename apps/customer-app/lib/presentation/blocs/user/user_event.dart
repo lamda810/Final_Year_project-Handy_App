@@ -18,6 +18,7 @@ class UpdateProfileRequested extends UserEvent {
   final String? firstName;
   final String? lastName;
   final String? email;
+  final String? contactPhone;
   final String? profileImage;
   final String? preferredLanguage;
 
@@ -25,6 +26,7 @@ class UpdateProfileRequested extends UserEvent {
     this.firstName,
     this.lastName,
     this.email,
+    this.contactPhone,
     this.profileImage,
     this.preferredLanguage,
   });
@@ -34,6 +36,7 @@ class UpdateProfileRequested extends UserEvent {
     firstName,
     lastName,
     email,
+    contactPhone,
     profileImage,
     preferredLanguage,
   ];

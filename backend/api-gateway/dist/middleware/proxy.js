@@ -17,7 +17,7 @@ export const createServiceProxy = (target, path) => {
             // Guard: If response was already sent (e.g., by rate limiter), abort the proxy request
             if (res.headersSent) {
                 proxyReq.destroy();
-                return;
+                return; // Must return to prevent further header/body writes on destroyed request
             }
             // Forward request ID first (before any body operations)
             if (extReq.requestId) {

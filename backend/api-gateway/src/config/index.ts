@@ -11,6 +11,7 @@ dotenv.config({ path: resolve(__dirname, '../../../../.env') });
 export const config = {
   port: parseInt(process.env.PORT || '3000', 10),
   nodeEnv: process.env.NODE_ENV || 'production',
+  localDevMode: process.env.LOCAL_DEV_MODE === 'true',
 
   jwt: {
     secret: process.env.JWT_SECRET || 'your-super-secret-jwt-key-change-in-production',

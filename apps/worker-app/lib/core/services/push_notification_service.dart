@@ -4,10 +4,9 @@ import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
-import 'package:shared_preferences/shared_preferences.dart';
-import 'package:appwrite/appwrite.dart';
-import '../appwrite/appwrite_client.dart';
-import '../appwrite/appwrite_config.dart';
+import '../constants/api_endpoints.dart';
+import '../network/dio_client.dart';
+import '../../injection_container.dart';
 
 /// Top-level background message handler (must be top-level function)
 @pragma('vm:entry-point')
@@ -28,9 +27,10 @@ class PushNotificationService {
   factory PushNotificationService() => _instance;
   PushNotificationService._internal();
 
-  final FirebaseMessaging _messaging = FirebaseMessaging.instance;
   final FlutterLocalNotificationsPlugin _localNotifications =
       FlutterLocalNotificationsPlugin();
+  FirebaseMessaging? _messaging;
+  bool _firebaseReady = false;
 
   String? _fcmToken;
   String? get fcmToken => _fcmToken;
@@ -48,9 +48,12 @@ class PushNotificationService {
     try {
       // 1. Initialize Firebase
       await Firebase.initializeApp();
+      _messaging = FirebaseMessaging.instance;
+      _firebaseReady = true;
       debugPrint('[FCM] Firebase initialized');
     } catch (e) {
       debugPrint('[FCM] Firebase init failed: $e');
+      _firebaseReady = false;
       return; // Can't proceed without Firebase
     }
 
@@ -68,13 +71,13 @@ class PushNotificationService {
       FirebaseMessaging.onMessageOpenedApp.listen(_handleNotificationTap);
 
       // 6. Check if app was opened from a terminated state notification
-      final initialMessage = await _messaging.getInitialMessage();
+      final initialMessage = await _messaging!.getInitialMessage();
       if (initialMessage != null) {
         _handleNotificationTap(initialMessage);
       }
 
       // 7. Set foreground notification presentation options (iOS)
-      await _messaging.setForegroundNotificationPresentationOptions(
+      await _messaging!.setForegroundNotificationPresentationOptions(
         alert: true,
         badge: true,
         sound: true,
@@ -92,7 +95,11 @@ class PushNotificationService {
 
   /// Request notification permission. Returns true if granted.
   Future<bool> requestPermission() async {
-    final settings = await _messaging.requestPermission(
+    if (!_firebaseReady || _messaging == null) {
+      return false;
+    }
+
+    final settings = await _messaging!.requestPermission(
       alert: true,
       announcement: false,
       badge: true,
@@ -114,21 +121,25 @@ class PushNotificationService {
   // TOKEN MANAGEMENT
   // ============================================================
 
-  /// Get FCM token and register it with Appwrite user prefs.
+  /// Get FCM token and register it with the backend notification service.
   /// Call this after the user is authenticated.
   Future<String?> getAndRegisterToken() async {
     try {
-      _fcmToken = await _messaging.getToken();
+      if (!_firebaseReady || _messaging == null) {
+        return null;
+      }
+
+      _fcmToken = await _messaging!.getToken();
 
       if (_fcmToken != null) {
         debugPrint('[FCM] Token: ${_fcmToken!.substring(0, 20)}...');
-        await _registerTokenWithAppwrite(_fcmToken!);
+        await _registerTokenWithBackend(_fcmToken!);
       }
 
       // Listen for token refresh
-      _messaging.onTokenRefresh.listen((newToken) {
+      _messaging!.onTokenRefresh.listen((newToken) {
         _fcmToken = newToken;
-        _registerTokenWithAppwrite(newToken);
+        _registerTokenWithBackend(newToken);
         debugPrint('[FCM] Token refreshed');
       });
 
@@ -139,45 +150,18 @@ class PushNotificationService {
     }
   }
 
-  /// Store FCM token in Appwrite user prefs and create a push target
-  /// so Appwrite Messaging can deliver push notifications to this device.
-  Future<void> _registerTokenWithAppwrite(String token) async {
+  /// Register the FCM device token with the backend so the notification
+  /// service can deliver push notifications to this device.
+  Future<void> _registerTokenWithBackend(String token) async {
     try {
-      final account = AppwriteClient.account;
-      final prefs = await SharedPreferences.getInstance();
-
-      // 1. Create/update Appwrite push target for Messaging
-      try {
-        // Delete old target if it exists
-        final oldTargetId = prefs.getString('fcm_target_id');
-        if (oldTargetId != null) {
-          try {
-            await account.deletePushTarget(targetId: oldTargetId);
-          } catch (_) {}
-        }
-
-        // Create new push target
-        final target = await account.createPushTarget(
-          targetId: ID.unique(),
-          identifier: token,
-          providerId: AppwriteConfig.fcmProviderId,
-        );
-        await prefs.setString('fcm_target_id', target.$id);
-        debugPrint('[FCM] Push target created: ${target.$id}');
-      } catch (e) {
-        debugPrint('[FCM] Push target error: $e');
-      }
-
-      // 2. Also store token in user preferences as backup reference
-      await account.updatePrefs(
-        prefs: {
-          'fcmToken': token,
+      await sl<DioClient>().dio.post(
+        ApiEndpoints.registerDevice,
+        data: {
+          'deviceToken': token,
           'platform': Platform.isAndroid ? 'android' : 'ios',
-          'tokenUpdatedAt': DateTime.now().toIso8601String(),
         },
       );
-
-      debugPrint('[FCM] Token registered with Appwrite');
+      debugPrint('[FCM] Token registered with backend');
     } catch (e) {
       debugPrint('[FCM] Error registering token: $e');
     }
@@ -186,25 +170,23 @@ class PushNotificationService {
   /// Unregister token (call on logout)
   Future<void> unregisterToken() async {
     try {
-      await _messaging.deleteToken();
-      _fcmToken = null;
-
-      // Delete push target from Appwrite
-      final prefs = await SharedPreferences.getInstance();
-      final targetId = prefs.getString('fcm_target_id');
-      if (targetId != null) {
-        try {
-          await AppwriteClient.account.deletePushTarget(targetId: targetId);
-        } catch (_) {}
-        await prefs.remove('fcm_target_id');
+      if (!_firebaseReady || _messaging == null) {
+        _fcmToken = null;
+        return;
       }
 
-      // Clear from Appwrite user prefs
-      try {
-        await AppwriteClient.account.updatePrefs(
-          prefs: {'fcmToken': '', 'platform': ''},
-        );
-      } catch (_) {}
+      final token = _fcmToken;
+      await _messaging!.deleteToken();
+      _fcmToken = null;
+
+      if (token != null) {
+        try {
+          await sl<DioClient>().dio.delete(
+            '/notifications/unregister-device',
+            data: {'deviceToken': token},
+          );
+        } catch (_) {}
+      }
 
       debugPrint('[FCM] Token unregistered');
     } catch (e) {

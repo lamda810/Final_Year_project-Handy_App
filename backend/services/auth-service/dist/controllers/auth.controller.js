@@ -1,7 +1,7 @@
-import { User, Customer, Worker, asyncHandler, successResponse, createdResponse, errorResponse, unauthorizedResponse, conflictResponse, validationErrorResponse, normalizePhoneNumber, normalizeCNIC, HTTP_STATUS, logger, } from '@handy-go/shared';
+import { User, Customer, Worker, TokenBlacklist, asyncHandler, successResponse, createdResponse, errorResponse, unauthorizedResponse, conflictResponse, validationErrorResponse, normalizePhoneNumber, normalizeCNIC, HTTP_STATUS, logger, } from '@handy-go/shared';
 import { sendOTPSchema, verifyOTPSchema, registerCustomerSchema, registerWorkerSchema, loginSchema, refreshTokenSchema, resetPasswordSchema, validate, } from '../validators/auth.validators.js';
 import { createAndSendOTP, verifyOTPCode } from '../services/otp.service.js';
-import { generateTokenPair, generateTempToken, verifyTempToken, verifyRefreshToken, } from '../services/token.service.js';
+import { generateTokenPair, generateTempToken, verifyTempToken, verifyRefreshToken, verifyAccessToken, } from '../services/token.service.js';
 /**
  * Send OTP
  * POST /api/auth/send-otp
@@ -293,11 +293,18 @@ export const refreshToken = asyncHandler(async (req, res) => {
     catch {
         return unauthorizedResponse(res, 'Invalid or expired refresh token');
     }
+    // Check if refresh token has been revoked
+    const isRevoked = await TokenBlacklist.isRevoked(value.refreshToken);
+    if (isRevoked) {
+        return unauthorizedResponse(res, 'Token has been revoked');
+    }
     // Get user
     const user = await User.findById(decoded.userId);
     if (!user || !user.isActive) {
         return unauthorizedResponse(res, 'User not found or inactive');
     }
+    // Blacklist the old refresh token to prevent reuse
+    await TokenBlacklist.revokeToken(value.refreshToken, user._id.toString(), 'token_refresh', new Date((decoded.exp || 0) * 1000));
     // Generate new tokens
     const tokens = generateTokenPair(user._id.toString(), user.role);
     return successResponse(res, tokens, 'Tokens refreshed successfully');
@@ -359,7 +366,42 @@ export const resetPassword = asyncHandler(async (req, res) => {
     // Update password
     user.password = value.newPassword;
     await user.save();
+    // Revoke all existing sessions for security
+    await TokenBlacklist.revokeAllForUser(user._id.toString(), 'password_reset');
     logger.info(`Password reset for user: ${user.phone}`);
     return successResponse(res, null, 'Password reset successful');
+});
+/**
+ * Logout - revoke current tokens
+ * POST /api/auth/logout
+ */
+export const logout = asyncHandler(async (req, res) => {
+    const authHeader = req.headers.authorization;
+    if (!authHeader?.startsWith('Bearer ')) {
+        return successResponse(res, null, 'Logged out successfully');
+    }
+    const accessToken = authHeader.split(' ')[1];
+    if (accessToken) {
+        // Revoke the access token
+        try {
+            const decoded = verifyAccessToken(accessToken);
+            await TokenBlacklist.revokeToken(accessToken, decoded.userId, 'logout', new Date((decoded.exp || 0) * 1000));
+        }
+        catch {
+            // Token may be invalid/expired already - still log out successfully
+        }
+    }
+    // Also revoke refresh token if provided in body
+    const { refreshToken: rt } = req.body || {};
+    if (rt) {
+        try {
+            const decoded = verifyRefreshToken(rt);
+            await TokenBlacklist.revokeToken(rt, decoded.userId, 'logout', new Date((decoded.exp || 0) * 1000));
+        }
+        catch {
+            // Ignore invalid refresh tokens during logout
+        }
+    }
+    return successResponse(res, null, 'Logged out successfully');
 });
 //# sourceMappingURL=auth.controller.js.map

@@ -1,6 +1,7 @@
 export declare const config: {
     port: number;
     nodeEnv: string;
+    localDevMode: boolean;
     jwt: {
         secret: string;
     };

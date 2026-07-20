@@ -23,6 +23,7 @@ export interface ICustomer extends Document {
     firstName: string;
     lastName: string;
     profileImage?: string;
+    contactPhone?: string;
     addresses: IAddress[];
     preferredLanguage: SupportedLanguage;
     totalBookings: number;

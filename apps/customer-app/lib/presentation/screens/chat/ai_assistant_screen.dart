@@ -175,14 +175,12 @@ class _AIAssistantScreenState extends State<AIAssistantScreen> {
               width: double.infinity,
               child: ElevatedButton(
                 onPressed: () {
-                  // Navigate to Booking screen with pre-filled info
                   Navigator.pushNamed(
-                    context, 
-                    AppRoutes.createBooking, 
+                    context,
+                    AppRoutes.serviceSelection,
                     arguments: {
                       'category': msg['detectedService'],
-                      'description': msg['text'],
-                    }
+                    },
                   );
                 },
                 child: const Text('Book This Service'),
@@ -232,9 +230,13 @@ class _AIAssistantScreenState extends State<AIAssistantScreen> {
     String? city;
     String? area;
     final userState = context.read<UserBloc>().state;
-    if (userState is UserLoaded) {
-      // Assuming user model has address or location info
-      // city = userState.user.city; 
+    if (userState is UserProfileLoaded) {
+      final defaultAddress = userState.addresses.where((address) => address.isDefault).firstOrNull ??
+          userState.addresses.firstOrNull;
+      if (defaultAddress != null) {
+        city = defaultAddress.city;
+        area = defaultAddress.label;
+      }
     }
 
     context.read<ChatbotBloc>().add(

@@ -2,11 +2,27 @@ import winston from 'winston';
 
 const { combine, timestamp, printf, colorize, json } = winston.format;
 
+/**
+ * JSON.stringify that tolerates circular references (e.g. an AxiosError's
+ * `request`/`response` objects reference each other) by replacing repeat
+ * occurrences with '[Circular]' instead of throwing.
+ */
+const safeStringify = (value: unknown): string => {
+  const seen = new WeakSet<object>();
+  return JSON.stringify(value, (_key, val) => {
+    if (typeof val === 'object' && val !== null) {
+      if (seen.has(val)) return '[Circular]';
+      seen.add(val);
+    }
+    return val;
+  });
+};
+
 // Custom format for development
 const devFormat = printf(({ level, message, timestamp, ...metadata }) => {
   let msg = `${timestamp} [${level}]: ${message}`;
   if (Object.keys(metadata).length > 0) {
-    msg += ` ${JSON.stringify(metadata)}`;
+    msg += ` ${safeStringify(metadata)}`;
   }
   return msg;
 });

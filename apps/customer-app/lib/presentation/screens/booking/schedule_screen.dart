@@ -89,6 +89,21 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
         date.day == now.day;
   }
 
+  /// Whether an hour:minute on the currently selected date would already be
+  /// in the past. Used to disable stale time slots/custom times so the
+  /// booking can never be submitted with a scheduledDateTime the backend
+  /// will reject (it requires scheduledDateTime >= now).
+  bool _isPastForSelectedDate(int hour, int minute) {
+    final candidate = DateTime(
+      _selectedDate.year,
+      _selectedDate.month,
+      _selectedDate.day,
+      hour,
+      minute,
+    );
+    return candidate.isBefore(DateTime.now());
+  }
+
   Future<void> _selectCustomTime() async {
     final colorScheme = Theme.of(context).colorScheme;
     final time = await showTimePicker(
@@ -113,6 +128,16 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
     );
 
     if (time != null) {
+      if (_isPastForSelectedDate(time.hour, time.minute)) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Please choose a time in the future'),
+            ),
+          );
+        }
+        return;
+      }
       setState(() {
         _selectedCustomTime = time;
         _selectedTimeSlot = null;
@@ -152,6 +177,19 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
       );
     } else {
       scheduledDateTime = DateTime.now().add(const Duration(hours: 1));
+    }
+
+    // Final guard: the backend rejects any scheduledDateTime before now.
+    // The slot/date pickers above already prevent picking a past time, but
+    // this catches it regardless (e.g. time elapsing while the screen was
+    // open) instead of letting a doomed request reach the server.
+    if (scheduledDateTime.isBefore(DateTime.now())) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Please select a date and time in the future'),
+        ),
+      );
+      return;
     }
 
     Navigator.of(context).pushNamed(
@@ -312,7 +350,23 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
 
           return GestureDetector(
             onTap: () {
-              setState(() => _selectedDate = date);
+              setState(() {
+                _selectedDate = date;
+                // Clear a previously-valid selection if it would now be in
+                // the past on the newly selected date (e.g. switching back
+                // to today after picking a slot for a future day).
+                if (_selectedTimeSlot != null &&
+                    _isPastForSelectedDate(_selectedTimeSlot!.startHour, 0)) {
+                  _selectedTimeSlot = null;
+                }
+                if (_selectedCustomTime != null &&
+                    _isPastForSelectedDate(
+                      _selectedCustomTime!.hour,
+                      _selectedCustomTime!.minute,
+                    )) {
+                  _selectedCustomTime = null;
+                }
+              });
             },
             child: Container(
               width: 70,
@@ -373,81 +427,93 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
     return Column(
       children: _timeSlots.map((slot) {
         final isSelected = _selectedTimeSlot == slot;
+        final isPast = _isPastForSelectedDate(slot.startHour, 0);
 
         return GestureDetector(
-          onTap: () {
-            setState(() {
-              _selectedTimeSlot = slot;
-              _selectedCustomTime = null;
-            });
-          },
-          child: Container(
-            margin: const EdgeInsets.only(bottom: AppSpacing.sm),
-            padding: const EdgeInsets.all(AppSpacing.md),
-            decoration: BoxDecoration(
-              color: isSelected
-                  ? AppColors.primary.withValues(alpha: 0.1)
-                  : colorScheme.surface,
-              borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
-              border: Border.all(
-                color: isSelected ? AppColors.primary : AppColors.border,
-                width: isSelected ? 2 : 1,
+          onTap: isPast
+              ? null
+              : () {
+                  setState(() {
+                    _selectedTimeSlot = slot;
+                    _selectedCustomTime = null;
+                  });
+                },
+          child: Opacity(
+            opacity: isPast ? 0.4 : 1.0,
+            child: Container(
+              margin: const EdgeInsets.only(bottom: AppSpacing.sm),
+              padding: const EdgeInsets.all(AppSpacing.md),
+              decoration: BoxDecoration(
+                color: isSelected
+                    ? AppColors.primary.withValues(alpha: 0.1)
+                    : colorScheme.surface,
+                borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
+                border: Border.all(
+                  color: isSelected ? AppColors.primary : AppColors.border,
+                  width: isSelected ? 2 : 1,
+                ),
               ),
-            ),
-            child: Row(
-              children: [
-                Container(
-                  padding: const EdgeInsets.all(AppSpacing.sm),
-                  decoration: BoxDecoration(
-                    color: isSelected
-                        ? AppColors.primary.withValues(alpha: 0.2)
-                        : colorScheme.surfaceContainerHighest,
-                    shape: BoxShape.circle,
+              child: Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(AppSpacing.sm),
+                    decoration: BoxDecoration(
+                      color: isSelected
+                          ? AppColors.primary.withValues(alpha: 0.2)
+                          : colorScheme.surfaceContainerHighest,
+                      shape: BoxShape.circle,
+                    ),
+                    child: Icon(
+                      slot.icon,
+                      color: isSelected
+                          ? AppColors.primary
+                          : colorScheme.onSurface.withValues(alpha: 0.7),
+                      size: 24,
+                    ),
                   ),
-                  child: Icon(
-                    slot.icon,
-                    color: isSelected
-                        ? AppColors.primary
-                        : colorScheme.onSurface.withValues(alpha: 0.7),
-                    size: 24,
-                  ),
-                ),
-                const SizedBox(width: AppSpacing.md),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        slot.label,
-                        style: TextStyle(
-                          fontWeight: FontWeight.w600,
-                          color: isSelected
-                              ? AppColors.primary
-                              : colorScheme.onSurface,
+                  const SizedBox(width: AppSpacing.md),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          slot.label,
+                          style: TextStyle(
+                            fontWeight: FontWeight.w600,
+                            color: isSelected
+                                ? AppColors.primary
+                                : colorScheme.onSurface,
+                          ),
                         ),
-                      ),
-                      Text(
-                        slot.description,
-                        style: TextStyle(
-                          fontSize: 12,
-                          color: colorScheme.onSurface.withValues(alpha: 0.7),
+                        Text(
+                          isPast
+                              ? '${slot.description} (past)'
+                              : slot.description,
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: colorScheme.onSurface.withValues(
+                              alpha: 0.7,
+                            ),
+                          ),
                         ),
-                      ),
-                    ],
+                      ],
+                    ),
                   ),
-                ),
-                Radio<TimeSlot>(
-                  value: slot,
-                  groupValue: _selectedTimeSlot,
-                  activeColor: AppColors.primary,
-                  onChanged: (TimeSlot? value) {
-                    setState(() {
-                      _selectedTimeSlot = value;
-                      _selectedCustomTime = null;
-                    });
-                  },
-                ),
-              ],
+                  Radio<TimeSlot>(
+                    value: slot,
+                    groupValue: _selectedTimeSlot,
+                    activeColor: AppColors.primary,
+                    onChanged: isPast
+                        ? null
+                        : (TimeSlot? value) {
+                            setState(() {
+                              _selectedTimeSlot = value;
+                              _selectedCustomTime = null;
+                            });
+                          },
+                  ),
+                ],
+              ),
             ),
           ),
         );

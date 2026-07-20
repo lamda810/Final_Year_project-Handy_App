@@ -1,18 +1,25 @@
 import 'dart:io';
-import 'package:appwrite/appwrite.dart';
 import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:image_picker/image_picker.dart';
-import '../../../core/appwrite/appwrite_client.dart';
-import '../../../core/appwrite/appwrite_config.dart';
+import 'package:url_launcher/url_launcher.dart';
+import '../../../core/constants/api_endpoints.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/constants/app_spacing.dart';
+import '../../../core/network/dio_client.dart';
+import '../../../injection_container.dart';
 
 class SOSScreen extends StatefulWidget {
   final String? bookingId;
   final String? customerName;
+  final String? customerPhone;
 
-  const SOSScreen({super.key, this.bookingId, this.customerName});
+  const SOSScreen({
+    super.key,
+    this.bookingId,
+    this.customerName,
+    this.customerPhone,
+  });
 
   @override
   State<SOSScreen> createState() => _SOSScreenState();
@@ -83,12 +90,10 @@ class _SOSScreenState extends State<SOSScreen> {
     setState(() => _isSending = true);
 
     try {
-      final tablesDB = AppwriteClient.tablesDB;
-      final user = await AppwriteClient.account.get();
-
-      // Get location (best-effort)
-      double? lat;
-      double? lng;
+      // Get location (best-effort; the API requires coordinates, so fall
+      // back to 0,0 rather than blocking the SOS)
+      double lat = 0.0;
+      double lng = 0.0;
       try {
         final permission = await Geolocator.checkPermission();
         if (permission == LocationPermission.denied) {
@@ -100,53 +105,28 @@ class _SOSScreenState extends State<SOSScreen> {
         lat = position.latitude;
         lng = position.longitude;
       } catch (_) {
-        // Location unavailable — proceed without it
+        // Location unavailable — proceed with 0,0
       }
 
-      // Create SOS record
-      final sosData = <String, dynamic>{
-        'reason': _selectedReason,
-        'description': _descriptionController.text.trim(),
-        'status': 'ACTIVE',
-        'priority': 'HIGH',
-        'initiatedByType': 'WORKER',
-        'initiatedByUserId': user.$id,
-      };
-
-      if (lat != null && lng != null) {
-        sosData['latitude'] = lat;
-        sosData['longitude'] = lng;
+      var description = _descriptionController.text.trim();
+      if (description.isEmpty) description = _selectedReason;
+      if (_evidenceImages.isNotEmpty) {
+        // TODO: Upload evidence once the backend exposes a storage endpoint.
+        description +=
+            '\n\n[Evidence: ${_evidenceImages.length} image(s) captured on device]';
       }
 
-      if (widget.bookingId != null) {
-        sosData['bookingId'] = widget.bookingId;
-      }
-
-      // Upload evidence images (best-effort, stored in SOS evidence bucket)
-      final evidenceUrls = await _uploadEvidence();
-      if (evidenceUrls.isNotEmpty) {
-        sosData['evidenceImages'] = evidenceUrls.join(',');
-      }
-
-      final result = await tablesDB.createRow(
-        databaseId: AppwriteConfig.databaseId,
-        tableId: AppwriteConfig.sosCollection,
-        rowId: ID.unique(),
-        data: sosData,
+      final response = await sl<DioClient>().dio.post(
+        ApiEndpoints.triggerSos,
+        data: {
+          if (widget.bookingId != null) 'bookingId': widget.bookingId,
+          'reason': _selectedReason,
+          'description': description,
+          'location': {'lat': lat, 'lng': lng},
+        },
       );
-
-      _sosId = result.$id;
-
-      // Try to call sos_analyzer function
-      try {
-        await AppwriteClient.functions.createExecution(
-          functionId: AppwriteConfig.sosAnalyzerFunction,
-          body:
-              '{"sosId": "$_sosId", "reason": "$_selectedReason", "description": "${_descriptionController.text.trim()}"}',
-        );
-      } catch (_) {
-        // Function may not be deployed yet - SOS record is still created
-      }
+      final data = response.data['data'] ?? {};
+      _sosId = (data['sosId'] ?? data['_id'] ?? '').toString();
 
       if (mounted) {
         setState(() {
@@ -212,29 +192,21 @@ class _SOSScreenState extends State<SOSScreen> {
     setState(() => _evidenceImages.removeAt(index));
   }
 
-  Future<List<String>> _uploadEvidence() async {
-    final urls = <String>[];
-    final storage = AppwriteClient.storage;
-    for (final image in _evidenceImages) {
-      try {
-        final ext = image.path.split('.').last.toLowerCase();
-        final fileId = ID.unique();
-        final file = await storage.createFile(
-          bucketId: AppwriteConfig.sosEvidenceBucket,
-          fileId: fileId,
-          file: InputFile.fromPath(
-            path: image.path,
-            filename: 'sos_evidence_$fileId.$ext',
-          ),
-        );
-        urls.add(
-          '${AppwriteConfig.endpoint}/storage/buckets/${AppwriteConfig.sosEvidenceBucket}/files/${file.$id}/view?project=${AppwriteConfig.projectId}',
-        );
-      } catch (_) {
-        // Upload failure should not block SOS
-      }
+  Future<void> _callCustomer() async {
+    final phone = widget.customerPhone;
+    if (phone == null || phone.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Customer phone number not available'),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+      return;
     }
-    return urls;
+    final uri = Uri.parse('tel:$phone');
+    if (await canLaunchUrl(uri)) {
+      await launchUrl(uri);
+    }
   }
 
   @override
@@ -288,6 +260,42 @@ class _SOSScreenState extends State<SOSScreen> {
               ),
             ),
             const SizedBox(height: AppSpacing.lg),
+
+            // Booking context
+            if (widget.bookingId != null) ...[
+              Card(
+                child: Padding(
+                  padding: const EdgeInsets.all(AppSpacing.md),
+                  child: Row(
+                    children: [
+                      Icon(
+                        Icons.work_outline,
+                        color: Theme.of(
+                          context,
+                        ).colorScheme.onSurface.withValues(alpha: 0.7),
+                      ),
+                      const SizedBox(width: AppSpacing.sm),
+                      Expanded(
+                        child: Text(
+                          widget.customerName != null
+                              ? 'Customer: ${widget.customerName}'
+                              : 'Active booking',
+                          style: const TextStyle(fontWeight: FontWeight.w600),
+                        ),
+                      ),
+                      if (widget.customerPhone != null &&
+                          widget.customerPhone!.isNotEmpty)
+                        OutlinedButton.icon(
+                          onPressed: _callCustomer,
+                          icon: const Icon(Icons.call, size: 18),
+                          label: const Text('Call Customer'),
+                        ),
+                    ],
+                  ),
+                ),
+              ),
+              const SizedBox(height: AppSpacing.lg),
+            ],
 
             // Reason selection
             const Text(

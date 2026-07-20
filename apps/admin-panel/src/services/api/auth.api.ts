@@ -1,53 +1,63 @@
 /**
- * Auth API — Appwrite session-based authentication for admin panel.
- *
- * Uses phone→synthetic-email mapping (`{phone}@handygo.app`) because
- * Appwrite auth is email-based while the platform uses phone numbers.
+ * Auth API — local backend authentication for admin panel.
  */
-import { account } from '../appwrite-client';
+import { apiRequest } from './client';
 import { useAuthStore } from '../../store/authStore';
 
 export const authApi = {
-  /**
-   * Login with phone + password.
-   * Maps phone to a synthetic email for Appwrite email-password auth.
-   */
   login: async (phone: string, password: string) => {
-    await account.createEmailPasswordSession(
-      `${phone}@handygo.app`,
-      password,
-    );
-    const user = await account.get();
+    const response = await apiRequest<{
+      user: {
+        id: string;
+        phone: string;
+        email?: string;
+        role: string;
+        isVerified: boolean;
+        isActive?: boolean;
+      };
+      accessToken: string;
+      refreshToken: string;
+    }>('/auth/login', {
+      method: 'POST',
+      auth: false,
+      body: { phone, password },
+    });
 
-    // Verify admin role via Appwrite user labels
-    if (!user.labels?.includes('admin')) {
-      await account.deleteSession('current');
+    const payload = response.data;
+    if (!payload) {
+      throw new Error('Login failed');
+    }
+
+    if (payload.user.role !== 'ADMIN') {
       throw new Error('This account does not have admin privileges');
     }
 
     const userData = {
-      _id: user.$id,
-      phone: user.phone || phone,
-      email: user.email,
-      role: 'ADMIN',
-      isVerified: user.emailVerification,
-      isActive: true,
+      _id: payload.user.id,
+      phone: payload.user.phone || phone,
+      email: payload.user.email,
+      role: payload.user.role,
+      isVerified: payload.user.isVerified,
+      isActive: payload.user.isActive ?? true,
     };
 
     return {
       success: true,
       user: userData,
-      // Appwrite manages sessions — tokens kept for store compatibility
-      accessToken: 'appwrite-session',
-      refreshToken: 'appwrite-session',
+      accessToken: payload.accessToken,
+      refreshToken: payload.refreshToken,
     };
   },
 
   logout: async () => {
     try {
-      await account.deleteSession('current');
+      const refreshToken = useAuthStore.getState().refreshToken;
+      await apiRequest('/auth/logout', {
+        method: 'POST',
+        body: refreshToken ? { refreshToken } : {},
+      });
     } catch {
-      // Session may already be expired
+      // Ignore logout errors during local development
     }
     useAuthStore.getState().logout();
   },

@@ -1,6 +1,6 @@
 import { OTPPurpose } from '@handy-go/shared';
 /**
- * Generate 6-digit OTP
+ * Generate 6-digit OTP using cryptographically secure random
  */
 export declare const generateOTP: () => string;
 /**

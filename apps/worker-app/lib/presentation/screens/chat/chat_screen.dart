@@ -1,22 +1,25 @@
 import 'dart:async';
-import 'package:appwrite/appwrite.dart';
+import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
-import '../../../core/appwrite/appwrite_client.dart';
-import '../../../core/appwrite/appwrite_config.dart';
+import '../../../core/constants/api_endpoints.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/constants/app_spacing.dart';
+import '../../../core/network/dio_client.dart';
+import '../../../injection_container.dart';
 
 class ChatScreen extends StatefulWidget {
   final String bookingId;
   final String customerName;
   final String customerPhone;
+  final String? bookingNumber;
 
   const ChatScreen({
     super.key,
     required this.bookingId,
     required this.customerName,
     required this.customerPhone,
+    this.bookingNumber,
   });
 
   @override
@@ -26,10 +29,10 @@ class ChatScreen extends StatefulWidget {
 class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
   final TextEditingController _messageController = TextEditingController();
   final ScrollController _scrollController = ScrollController();
+  final Dio _dio = sl<DioClient>().dio;
   final List<_ChatMessage> _messages = [];
   bool _isLoading = true;
   String? _error;
-  RealtimeSubscription? _subscription;
   Timer? _pollTimer;
 
   @override
@@ -37,8 +40,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
     _loadMessages();
-    _subscribeToMessages();
-    // Polling fallback: reload messages every 5s in case realtime misses events
+    // Poll for new messages every 5s
     _pollTimer = Timer.periodic(const Duration(seconds: 5), (_) {
       if (mounted && !_isLoading) _loadMessages();
     });
@@ -49,9 +51,6 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
     if (state == AppLifecycleState.resumed && mounted) {
       // Reload messages when app comes back to foreground
       _loadMessages();
-      // Re-subscribe in case WebSocket was disconnected
-      _subscription?.close();
-      _subscribeToMessages();
     }
   }
 
@@ -61,7 +60,6 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
     _pollTimer?.cancel();
     _messageController.dispose();
     _scrollController.dispose();
-    _subscription?.close();
     super.dispose();
   }
 
@@ -70,29 +68,22 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
       debugPrint(
         '[WorkerChat] Loading messages for booking: ${widget.bookingId}',
       );
-      final tablesDB = AppwriteClient.tablesDB;
-      final result = await tablesDB.listRows(
-        databaseId: AppwriteConfig.databaseId,
-        tableId: AppwriteConfig.chatMessagesCollection,
-        queries: [
-          Query.equal('bookingId', widget.bookingId),
-          Query.orderAsc('\$createdAt'),
-          Query.limit(100),
-        ],
+      final response = await _dio.get(
+        ApiEndpoints.bookingMessages(widget.bookingId),
       );
+      final rows = (response.data['data'] as List<dynamic>? ?? []);
 
-      debugPrint(
-        '[WorkerChat] Fetched ${result.rows.length} messages from server',
-      );
+      debugPrint('[WorkerChat] Fetched ${rows.length} messages from server');
 
       final fetched = <_ChatMessage>[];
-      for (final row in result.rows) {
+      for (final row in rows) {
         fetched.add(
           _ChatMessage(
-            id: row.$id,
-            text: row.data['message'] ?? '',
-            isMe: row.data['senderType'] == 'WORKER',
-            timestamp: DateTime.tryParse(row.$createdAt) ?? DateTime.now(),
+            id: row['_id'] ?? '',
+            text: row['message'] ?? '',
+            isMe: row['senderType'] == 'WORKER',
+            timestamp:
+                DateTime.tryParse(row['createdAt'] ?? '') ?? DateTime.now(),
           ),
         );
       }
@@ -128,68 +119,6 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
     }
   }
 
-  /// Subscribe to new chat messages for this booking.
-  /// Subscribes to the entire chat_messages collection; client-side filter
-  /// by bookingId ensures only messages for this conversation are shown.
-  void _subscribeToMessages() {
-    try {
-      final realtime = AppwriteClient.realtime;
-      final channel =
-          'tablesdb.${AppwriteConfig.databaseId}.tables.${AppwriteConfig.chatMessagesCollection}.rows';
-      debugPrint('[WorkerChat] Subscribing to Realtime channel: $channel');
-      _subscription = realtime.subscribe([channel]);
-
-      _subscription!.stream.listen(
-        (event) {
-          debugPrint('[WorkerChat] Realtime event received: ${event.events}');
-          // Handle create, update, and any other event types
-          final data = event.payload;
-          if (data.isNotEmpty) {
-            final msgBookingId =
-                data['bookingId'] ?? data['data']?['bookingId'];
-            debugPrint(
-              '[WorkerChat] Realtime message bookingId: $msgBookingId (mine: ${widget.bookingId})',
-            );
-            if (msgBookingId == widget.bookingId) {
-              final newMessage = _ChatMessage(
-                id: data['\$id'] ?? '',
-                text: data['message'] ?? data['data']?['message'] ?? '',
-                isMe:
-                    (data['senderType'] ?? data['data']?['senderType']) ==
-                    'WORKER',
-                timestamp:
-                    DateTime.tryParse(data['\$createdAt'] ?? '') ??
-                    DateTime.now(),
-              );
-
-              // Avoid duplicates (from own optimistic add or re-delivery)
-              if (mounted && !_messages.any((m) => m.id == newMessage.id)) {
-                debugPrint(
-                  '[WorkerChat] Adding new Realtime message: ${newMessage.id} from ${newMessage.isMe ? "ME" : "CUSTOMER"}',
-                );
-                setState(() => _messages.add(newMessage));
-                _scrollToBottom();
-              }
-            }
-          }
-        },
-        onError: (error) {
-          debugPrint('[WorkerChat] Realtime stream error: $error');
-        },
-        onDone: () {
-          debugPrint(
-            '[WorkerChat] Realtime stream closed, attempting reconnect...',
-          );
-          Future.delayed(const Duration(seconds: 3), () {
-            if (mounted) _subscribeToMessages();
-          });
-        },
-      );
-    } catch (e) {
-      debugPrint('[WorkerChat] Failed to subscribe to Realtime: $e');
-    }
-  }
-
   Future<void> _sendMessage() async {
     final text = _messageController.text.trim();
     if (text.isEmpty) return;
@@ -212,29 +141,24 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
       debugPrint(
         '[WorkerChat] Sending message to booking ${widget.bookingId}: "${text.length > 50 ? text.substring(0, 50) : text}"',
       );
-      final tablesDB = AppwriteClient.tablesDB;
-      final row = await tablesDB.createRow(
-        databaseId: AppwriteConfig.databaseId,
-        tableId: AppwriteConfig.chatMessagesCollection,
-        rowId: ID.unique(),
-        data: {
-          'bookingId': widget.bookingId,
-          'message': text,
-          'senderType': 'WORKER',
-        },
+      final response = await _dio.post(
+        ApiEndpoints.bookingMessages(widget.bookingId),
+        data: {'message': text},
       );
-      debugPrint('[WorkerChat] Message sent successfully, id: ${row.$id}');
+      final row = response.data['data'] as Map<String, dynamic>? ?? {};
+      debugPrint('[WorkerChat] Message sent successfully, id: ${row['_id']}');
 
-      // Replace temp message with real one (so realtime dedup works)
+      // Replace temp message with real one (so polling dedup works)
       if (mounted) {
         setState(() {
           final idx = _messages.indexWhere((m) => m.id == tempId);
           if (idx != -1) {
             _messages[idx] = _ChatMessage(
-              id: row.$id,
+              id: row['_id'] ?? tempId,
               text: text,
               isMe: true,
-              timestamp: DateTime.tryParse(row.$createdAt) ?? DateTime.now(),
+              timestamp:
+                  DateTime.tryParse(row['createdAt'] ?? '') ?? DateTime.now(),
             );
           }
         });
@@ -275,7 +199,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
           children: [
             Text(widget.customerName, style: const TextStyle(fontSize: 16)),
             Text(
-              'Booking: ${widget.bookingId}',
+              'Booking: ${widget.bookingNumber ?? widget.bookingId}',
               style: TextStyle(
                 fontSize: 12,
                 color: Theme.of(

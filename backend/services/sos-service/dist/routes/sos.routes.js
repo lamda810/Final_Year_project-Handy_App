@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import * as sosController from '../controllers/sos.controller.js';
-import { authenticate, authorize } from '../middleware/auth.middleware.js';
+import { authenticate, authorize } from '@handy-go/shared';
 import { USER_ROLES_OBJ } from '@handy-go/shared';
 import { triggerSOSSchema, updateSOSSchema, resolveSOSSchema, escalateSOSSchema, getActiveSOSSchema, markFalseAlarmSchema, } from '../validators/sos.validators.js';
 const router = Router();
@@ -40,19 +40,9 @@ const validateQuery = (schema) => {
  * @access Private (CUSTOMER, WORKER)
  */
 router.post('/trigger', authenticate, authorize(USER_ROLES_OBJ.CUSTOMER, USER_ROLES_OBJ.WORKER), validate(triggerSOSSchema), sosController.triggerSOS);
-/**
- * @route GET /api/sos/:sosId
- * @desc Get SOS details
- * @access Private
- */
-router.get('/:sosId', authenticate, sosController.getSOSDetails);
-/**
- * @route PUT /api/sos/:sosId/update
- * @desc Update SOS with additional information
- * @access Private (CUSTOMER, WORKER)
- */
-router.put('/:sosId/update', authenticate, authorize(USER_ROLES_OBJ.CUSTOMER, USER_ROLES_OBJ.WORKER), validate(updateSOSSchema), sosController.updateSOS);
 // ==================== Admin Endpoints ====================
+// IMPORTANT: Admin routes MUST be defined BEFORE the /:sosId param route
+// to prevent Express from matching "admin" as a sosId parameter.
 /**
  * @route GET /api/sos/admin/active
  * @desc Get all active SOS sorted by priority
@@ -89,5 +79,19 @@ router.post('/admin/:sosId/escalate', authenticate, authorize(USER_ROLES_OBJ.ADM
  * @access Private (ADMIN)
  */
 router.post('/admin/:sosId/false-alarm', authenticate, authorize(USER_ROLES_OBJ.ADMIN), validate(markFalseAlarmSchema), sosController.markFalseAlarm);
+// ==================== Parameterized User Endpoints ====================
+// These MUST come AFTER /admin/* routes to avoid catching "admin" as :sosId
+/**
+ * @route GET /api/sos/:sosId
+ * @desc Get SOS details
+ * @access Private
+ */
+router.get('/:sosId', authenticate, sosController.getSOSDetails);
+/**
+ * @route PUT /api/sos/:sosId/update
+ * @desc Update SOS with additional information
+ * @access Private (CUSTOMER, WORKER)
+ */
+router.put('/:sosId/update', authenticate, authorize(USER_ROLES_OBJ.CUSTOMER, USER_ROLES_OBJ.WORKER), validate(updateSOSSchema), sosController.updateSOS);
 export default router;
 //# sourceMappingURL=sos.routes.js.map

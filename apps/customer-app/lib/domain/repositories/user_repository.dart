@@ -10,7 +10,7 @@ abstract class UserRepository {
     String? firstName,
     String? lastName,
     String? email,
-    String? phone,
+    String? contactPhone,
     String? profileImage,
     String? preferredLanguage,
   });
@@ -18,14 +18,16 @@ abstract class UserRepository {
   /// Get user's saved addresses
   Future<List<AddressModel>> getAddresses();
 
-  /// Add a new address
-  Future<AddressModel> addAddress(AddressModel address);
+  /// Add a new address. Returns the customer's full, updated address list.
+  Future<List<AddressModel>> addAddress(AddressModel address);
 
-  /// Update an existing address
-  Future<AddressModel> updateAddress(String addressId, AddressModel address);
+  /// Update an existing address. Returns the customer's full, updated
+  /// address list.
+  Future<List<AddressModel>> updateAddress(String addressId, AddressModel address);
 
-  /// Set an address as the default
-  Future<void> setDefaultAddress(String addressId);
+  /// Set an address as the default. Returns the customer's full, updated
+  /// address list.
+  Future<List<AddressModel>> setDefaultAddress(String addressId);
 
   /// Delete an address
   Future<void> deleteAddress(String addressId);

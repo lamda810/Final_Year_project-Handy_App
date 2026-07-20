@@ -11,28 +11,28 @@ abstract class AuthEvent extends Equatable {
 class CheckAuthStatus extends AuthEvent {}
 
 class SendOTPRequested extends AuthEvent {
-  final String email;
+  final String phone;
   final String purpose;
 
-  const SendOTPRequested({required this.email, required this.purpose});
+  const SendOTPRequested({required this.phone, required this.purpose});
 
   @override
-  List<Object?> get props => [email, purpose];
+  List<Object?> get props => [phone, purpose];
 }
 
 class VerifyOTPRequested extends AuthEvent {
-  final String email;
+  final String phone;
   final String code;
   final String purpose;
 
   const VerifyOTPRequested({
-    required this.email,
+    required this.phone,
     required this.code,
     required this.purpose,
   });
 
   @override
-  List<Object?> get props => [email, code, purpose];
+  List<Object?> get props => [phone, code, purpose];
 }
 
 class RegisterRequested extends AuthEvent {
@@ -83,12 +83,12 @@ class LogoutRequested extends AuthEvent {}
 class RefreshProfile extends AuthEvent {}
 
 class ForgotPasswordRequested extends AuthEvent {
-  final String email;
+  final String phone;
 
-  const ForgotPasswordRequested({required this.email});
+  const ForgotPasswordRequested({required this.phone});
 
   @override
-  List<Object?> get props => [email];
+  List<Object?> get props => [phone];
 }
 
 class ResetPasswordRequested extends AuthEvent {

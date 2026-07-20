@@ -4,7 +4,6 @@ import '../../domain/repositories/auth_repository.dart';
 import '../../data/models/user_model.dart';
 import '../../data/models/auth_response_model.dart';
 import '../datasources/remote/auth_remote_datasource.dart';
-import '../datasources/appwrite/appwrite_auth_datasource.dart';
 import 'dart:convert';
 
 /// Auth repository implementation
@@ -31,27 +30,7 @@ class AuthRepositoryImpl implements AuthRepository {
     // First check local token cache
     final accessToken = await getAccessToken();
     if (accessToken != null && accessToken.isNotEmpty) {
-      // Also verify the Appwrite session is still valid
-      if (_remoteDataSource is AppwriteAuthDataSource) {
-        return await _remoteDataSource.isLoggedIn();
-      }
       return true;
-    }
-    // No local token — check if there's an active Appwrite session anyway
-    if (_remoteDataSource is AppwriteAuthDataSource) {
-      final isActive = await _remoteDataSource.isLoggedIn();
-      if (isActive) {
-        // Session exists but local cache is empty — refresh it
-        try {
-          final response = await _remoteDataSource.refreshToken(
-            refreshToken: '',
-          );
-          await _saveAuthResponse(response);
-          return true;
-        } catch (_) {
-          return false;
-        }
-      }
     }
     return false;
   }
@@ -74,17 +53,6 @@ class AuthRepositoryImpl implements AuthRepository {
         return UserModel.fromJson(json.decode(userJson));
       } catch (e) {
         // Fall through to fetch from remote
-      }
-    }
-
-    // If no cached user, try to fetch from Appwrite session
-    if (_remoteDataSource is AppwriteAuthDataSource) {
-      try {
-        final response = await _remoteDataSource.refreshToken(refreshToken: '');
-        await _saveAuthResponse(response);
-        return response.user;
-      } catch (_) {
-        return null;
       }
     }
 
@@ -185,13 +153,10 @@ class AuthRepositoryImpl implements AuthRepository {
 
   @override
   Future<void> logout() async {
-    // Destroy Appwrite session
-    if (_remoteDataSource is AppwriteAuthDataSource) {
-      try {
-        await _remoteDataSource.logout();
-      } catch (_) {
-        // Best effort — clear local state regardless
-      }
+    try {
+      await _remoteDataSource.logout();
+    } catch (_) {
+      // Best effort — clear local state regardless
     }
     await _secureStorage.delete(key: _accessTokenKey);
     await _secureStorage.delete(key: _refreshTokenKey);

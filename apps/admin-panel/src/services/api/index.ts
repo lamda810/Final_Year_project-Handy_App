@@ -1,14 +1,10 @@
 /**
- * Barrel re-export for all Appwrite API domain modules.
- *
- * Import from here instead of individual files for convenience:
- *   import { authApi, bookingsApi, usersApi } from '../services/api';
+ * Barrel re-export for local admin API domain modules.
  */
 export { authApi } from './auth.api';
 export { usersApi } from './users.api';
 export { bookingsApi } from './bookings.api';
 export { sosApi } from './sos.api';
-export { appwriteRealtime } from './realtime.api';
+export { realtimeApi } from './realtime.api';
 export { settingsApi } from './settings.api';
 export { paymentsApi } from './payments.api';
-export { mapWorkerDoc, mapBookingDoc } from './mappers';

@@ -40,13 +40,34 @@ export const createServiceProxy = (target: string, path: string): RequestHandler
       // Add service key for internal communication
       proxyReq.setHeader('X-Service-Key', config.serviceKey);
 
-      // Restream body if it was parsed by express.json()
-      // This must be done LAST after all headers are set
-      if (extReq.body && Object.keys(extReq.body).length > 0) {
+      // Restream body if it was parsed by express.json(). This must be done
+      // LAST after all headers are set.
+      //
+      // Bug history: this used to skip the write whenever `extReq.body`
+      // parsed down to an empty object ({} has zero keys) — but the
+      // *original* Content-Length header (forwarded from the client's real
+      // request) still passes through untouched. A client that sent a
+      // literal "{}" body (2 real bytes — e.g. dio POSTing {} when an
+      // optional field is omitted) advertises Content-Length: 2 with
+      // nothing ever written to match it, so the downstream service's body
+      // parser hangs forever waiting for bytes that never arrive. Gate on
+      // whether the client actually sent a body at all (Content-Length > 0
+      // or chunked), not on whether it happens to parse to {}.
+      const contentLengthHeader = extReq.headers['content-length'];
+      const hasIncomingBody =
+        extReq.headers['transfer-encoding'] === 'chunked' ||
+        (contentLengthHeader !== undefined && parseInt(contentLengthHeader, 10) > 0);
+
+      if (extReq.body !== undefined && hasIncomingBody) {
         const bodyData = JSON.stringify(extReq.body);
         proxyReq.setHeader('Content-Type', 'application/json');
         proxyReq.setHeader('Content-Length', Buffer.byteLength(bodyData));
         proxyReq.write(bodyData);
+      } else {
+        // No body was actually sent — make sure no stale Content-Length
+        // from the original request is forwarded, so the downstream parser
+        // doesn't wait for bytes that will never come.
+        proxyReq.removeHeader('Content-Length');
       }
 
       logger.debug('Proxying request', {

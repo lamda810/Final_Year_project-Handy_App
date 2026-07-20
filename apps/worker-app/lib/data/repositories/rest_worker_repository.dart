@@ -13,7 +13,7 @@ class RestWorkerRepository implements WorkerRepository {
   Future<WorkerModel> getProfile() async {
     try {
       final response = await _dio.get(ApiEndpoints.workerProfile);
-      return WorkerModel.fromJson(response.data);
+      return WorkerModel.fromJson(response.data['data'] ?? response.data);
     } catch (e) {
       rethrow;
     }
@@ -24,7 +24,7 @@ class RestWorkerRepository implements WorkerRepository {
     String? firstName,
     String? lastName,
     String? email,
-    String? phone,
+    String? contactPhone,
     String? profileImage,
     List<SkillModel>? skills,
     double? serviceRadius,
@@ -32,13 +32,13 @@ class RestWorkerRepository implements WorkerRepository {
     BankDetails? bankDetails,
   }) async {
     try {
-      final response = await _dio.patch(
+      final response = await _dio.put(
         ApiEndpoints.workerProfile,
         data: {
           if (firstName != null) 'firstName': firstName,
           if (lastName != null) 'lastName': lastName,
           if (email != null) 'email': email,
-          if (phone != null) 'phone': phone,
+          if (contactPhone != null) 'contactPhone': contactPhone,
           if (profileImage != null) 'profileImage': profileImage,
           if (skills != null) 'skills': skills.map((s) => s.toJson()).toList(),
           if (serviceRadius != null) 'serviceRadius': serviceRadius,
@@ -46,7 +46,7 @@ class RestWorkerRepository implements WorkerRepository {
           if (bankDetails != null) 'bankDetails': bankDetails.toJson(),
         },
       );
-      return WorkerModel.fromJson(response.data);
+      return WorkerModel.fromJson(response.data['data'] ?? response.data);
     } catch (e) {
       rethrow;
     }
@@ -54,38 +54,35 @@ class RestWorkerRepository implements WorkerRepository {
 
   @override
   Future<void> updateLocation(double lat, double lng) async {
-    await _dio.post(
+    await _dio.put(
       ApiEndpoints.updateLocation,
-      data: {'lat': lat, 'lng': lng},
+      data: {
+        'coordinates': {'lat': lat, 'lng': lng},
+      },
     );
   }
 
   @override
   Future<bool> updateAvailability(bool isAvailable) async {
-    final response = await _dio.post(
+    final response = await _dio.put(
       ApiEndpoints.updateAvailability,
       data: {'isAvailable': isAvailable},
     );
-    return response.data['isAvailable'] as bool;
+    final data = response.data['data'] ?? response.data;
+    return (data['isAvailable'] as bool?) ?? isAvailable;
   }
 
   @override
   Future<String> uploadDocument(String type, String filePath) async {
-    final formData = FormData.fromMap({
-      'type': type,
-      'document': await MultipartFile.fromFile(filePath),
-    });
-    final response = await _dio.post(ApiEndpoints.uploadDocuments, data: formData);
-    return response.data['url'] as String;
+    // TODO: The backend's POST /users/worker/documents expects a hosted
+    // {type, url} — there is no file storage endpoint yet to upload to.
+    throw UnsupportedError('Document upload is not available yet');
   }
 
   @override
   Future<String> uploadProfileImage(String filePath) async {
-    final formData = FormData.fromMap({
-      'image': await MultipartFile.fromFile(filePath),
-    });
-    final response = await _dio.post('/users/worker/profile-image', data: formData);
-    return response.data['url'] as String;
+    // TODO: No backend storage endpoint exists yet for profile images.
+    throw UnsupportedError('Profile photo upload is not available yet');
   }
 
   @override
@@ -100,6 +97,6 @@ class RestWorkerRepository implements WorkerRepository {
         if (endDate != null) 'endDate': endDate.toIso8601String(),
       },
     );
-    return response.data;
+    return (response.data['data'] ?? response.data) as Map<String, dynamic>;
   }
 }

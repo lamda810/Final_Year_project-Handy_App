@@ -37,3 +37,4 @@ export { Notification, INotification, INotificationModel } from './Notification.
 export { Review, IReview, IReviewModel, ICategoryRatings } from './Review.js';
 export { OTP, IOTP, IOTPModel } from './OTP.js';
 export { TokenBlacklist, ITokenBlacklist, ITokenBlacklistModel } from './TokenBlacklist.js';
+export { ChatMessage, IChatMessage, ChatSenderType } from './ChatMessage.js';

@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import * as notificationController from '../controllers/notification.controller.js';
-import { authenticate, authenticateService } from '../middleware/auth.middleware.js';
+import { authenticate, authenticateService } from '@handy-go/shared';
 import { sendNotificationSchema, sendTemplatedNotificationSchema, sendBulkNotificationSchema, registerDeviceSchema, unregisterDeviceSchema, getNotificationsSchema, } from '../validators/notification.validators.js';
 const router = Router();
 // Validation middleware helper

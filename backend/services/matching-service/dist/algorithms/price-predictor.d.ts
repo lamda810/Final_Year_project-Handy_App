@@ -32,6 +32,8 @@ export declare const estimatePrice: (data: {
     serviceCategory: string;
     problemDescription: string;
     city: string;
+    area?: string;
+    scheduledDateTime?: string;
 }) => Promise<PriceEstimate>;
 /**
  * Estimate duration for a service
@@ -45,6 +47,8 @@ declare const _default: {
         serviceCategory: string;
         problemDescription: string;
         city: string;
+        area?: string;
+        scheduledDateTime?: string;
     }) => Promise<PriceEstimate>;
     estimateDuration: (data: {
         serviceCategory: string;

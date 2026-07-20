@@ -3,10 +3,16 @@ import cors from 'cors';
 import helmet from 'helmet';
 import morgan from 'morgan';
 import compression from 'compression';
+import path from 'path';
+import { fileURLToPath } from 'url';
 import { logger } from '@handy-go/shared';
 import { config } from './config/index.js';
 import { serviceRoutes } from './config/routes.js';
 import { authenticate } from './middleware/auth.js';
+import uploadRoutes from './routes/upload.routes.js';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 import {
   generalRateLimiter,
   authRateLimiter,
@@ -20,6 +26,7 @@ import {
   handlePreflight,
 } from './middleware/common.js';
 import { setupProxies } from './middleware/proxy.js';
+import { createLocalDevProtectedRouter, createLocalDevPublicRouter } from './local-dev/router.js';
 
 const app: Application = express();
 
@@ -40,7 +47,7 @@ app.use(cors({
   origin: config.corsOrigins,
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'X-Request-ID'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Request-ID', 'ngrok-skip-browser-warning'],
 }));
 app.use(handlePreflight);
 
@@ -84,11 +91,16 @@ app.get('/health', (req, res) => {
   });
 });
 
+// Uploaded images (booking photos, profile photos, etc.) — local-disk
+// storage served statically. Public per config/routes.ts's publicRoutes.
+app.use('/uploads', express.static(path.resolve(__dirname, '../uploads')));
+
 app.get('/api/health', (req, res) => {
   res.json({
     status: 'healthy',
     service: 'api-gateway',
     timestamp: new Date().toISOString(),
+    localDevMode: config.localDevMode,
   });
 });
 
@@ -98,6 +110,11 @@ app.get('/api/health', (req, res) => {
 app.use('/api/auth', authRateLimiter);
 app.use('/api/sos', sosRateLimiter);
 
+if (config.localDevMode) {
+  logger.info('Running API Gateway in local dev mode without Docker or microservices');
+  app.use(createLocalDevPublicRouter());
+}
+
 // ==================== Authentication ====================
 
 // Authenticate requests (skips public routes)
@@ -106,10 +123,24 @@ app.use(authenticate);
 // Apply authenticated rate limiter after auth
 app.use(authenticatedRateLimiter);
 
+if (config.localDevMode) {
+  app.use(createLocalDevProtectedRouter());
+}
+
+// ==================== File Uploads ====================
+
+// Handled directly in the gateway (not proxied) — multipart/form-data
+// bodies through http-proxy-middleware have already been a source of
+// bugs here (see the Content-Length fix in proxy.ts), so avoid that
+// path entirely for file uploads.
+app.use('/api/uploads', uploadRoutes);
+
 // ==================== Service Proxies ====================
 
 // Set up proxies to microservices
-setupProxies(app);
+if (!config.localDevMode) {
+  setupProxies(app);
+}
 
 // ==================== 404 Handler ====================
 
@@ -152,6 +183,7 @@ const startServer = () => {
   const server = app.listen(config.port, () => {
     logger.info(`🚀 API Gateway running on port ${config.port}`);
     logger.info(`Environment: ${config.nodeEnv}`);
+    logger.info(`Local dev mode: ${config.localDevMode ? 'enabled' : 'disabled'}`);
     logger.info('Configured services:');
     Object.entries(config.services).forEach(([name, url]) => {
       logger.info(`  - ${name}: ${url}`);

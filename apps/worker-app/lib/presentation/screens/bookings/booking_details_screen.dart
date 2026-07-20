@@ -1,11 +1,13 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/constants/app_spacing.dart';
-import '../../../core/appwrite/appwrite_config.dart';
-import '../../../core/appwrite/realtime_manager.dart';
+import '../../../core/utils/string_extensions.dart';
+import '../../../core/widgets/photo_strip.dart';
 import '../../../data/models/booking_model.dart';
-import '../../../data/repositories/appwrite_booking_repository.dart';
+import '../../../domain/repositories/booking_repository.dart';
+import '../../../injection_container.dart';
 import '../../routes/app_routes.dart';
 
 class BookingDetailsScreen extends StatefulWidget {
@@ -18,61 +20,53 @@ class BookingDetailsScreen extends StatefulWidget {
 }
 
 class _BookingDetailsScreenState extends State<BookingDetailsScreen> {
-  final AppwriteBookingRepository _repository = AppwriteBookingRepository();
+  final BookingRepository _repository = sl<BookingRepository>();
   BookingModel? _booking;
   bool _isLoading = true;
   bool _isAccepting = false;
-  RealtimeSubscriptionHandle? _bookingHandle;
+  Timer? _statusPollTimer;
 
   @override
   void initState() {
     super.initState();
     _loadBooking();
-    _subscribeToBookingUpdates();
+    _startStatusPolling();
   }
 
   @override
   void dispose() {
-    _bookingHandle?.cancel();
+    _statusPollTimer?.cancel();
     super.dispose();
   }
 
-  /// Subscribe to realtime changes on this booking (e.g. customer cancels
-  /// or booking gets reassigned while worker is reviewing it).
-  void _subscribeToBookingUpdates() {
-    _bookingHandle = RealtimeManager().subscribe(
-      channels: [
-        'tablesdb.${AppwriteConfig.databaseId}.tables.${AppwriteConfig.bookingsCollection}.rows.${widget.bookingId}',
-      ],
-      onData: (event) {
+  /// Poll the booking so customer-side changes (e.g. cancellation or
+  /// reassignment while the worker is reviewing) are picked up.
+  void _startStatusPolling() {
+    _statusPollTimer = Timer.periodic(const Duration(seconds: 10), (_) async {
+      if (!mounted || _isAccepting) return;
+      try {
+        final booking = await _repository.getBookingDetails(widget.bookingId);
         if (!mounted) return;
-        final data = event.payload;
-        final newStatus = data['status'] as String?;
-
-        if (newStatus == 'CANCELLED') {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('This booking has been cancelled by the customer'),
-              backgroundColor: AppColors.error,
-            ),
-          );
-          Navigator.pop(context);
-          return;
-        }
-
-        // Reload to reflect any changes
-        _loadBooking();
-      },
-    );
+        if (_bounceIfCancelled(booking)) return;
+        setState(() => _booking = booking);
+      } catch (_) {
+        // Polling is best-effort; ignore transient errors
+      }
+    });
   }
 
   Future<void> _loadBooking() async {
     try {
       final booking = await _repository.getBookingDetails(widget.bookingId);
+      if (!mounted) return;
       setState(() {
         _booking = booking;
         _isLoading = false;
       });
+      // The booking may already have been cancelled before this screen was
+      // ever opened (e.g. tapped from a stale, not-yet-refreshed list) —
+      // check on the very first load too, not just while polling.
+      _bounceIfCancelled(booking);
     } catch (e) {
       setState(() {
         _isLoading = false;
@@ -86,6 +80,22 @@ class _BookingDetailsScreenState extends State<BookingDetailsScreen> {
         );
       }
     }
+  }
+
+  /// If [booking] is cancelled, tell the worker and leave this screen.
+  /// Returns true if it bounced (caller should not proceed to use the
+  /// booking further).
+  bool _bounceIfCancelled(BookingModel booking) {
+    if (!booking.isCancelled) return false;
+    _statusPollTimer?.cancel();
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('This booking has been cancelled by the customer'),
+        backgroundColor: AppColors.error,
+      ),
+    );
+    Navigator.pop(context);
+    return true;
   }
 
   Future<void> _acceptBooking() async {
@@ -272,6 +282,23 @@ class _BookingDetailsScreenState extends State<BookingDetailsScreen> {
                             booking.problemDescription,
                             style: const TextStyle(fontSize: 15),
                           ),
+                          if (booking.beforeImages != null &&
+                              booking.beforeImages!.isNotEmpty) ...[
+                            const SizedBox(height: AppSpacing.md),
+                            Text(
+                              'Photos from Customer',
+                              style: TextStyle(
+                                fontWeight: FontWeight.w600,
+                                fontSize: 13,
+                                color: Theme.of(context)
+                                    .colorScheme
+                                    .onSurface
+                                    .withValues(alpha: 0.7),
+                              ),
+                            ),
+                            const SizedBox(height: AppSpacing.sm),
+                            PhotoStrip(imageUrls: booking.beforeImages!),
+                          ],
                         ],
                       ),
                     ),
@@ -300,9 +327,7 @@ class _BookingDetailsScreenState extends State<BookingDetailsScreen> {
                                 radius: 24,
                                 backgroundColor: AppColors.secondary,
                                 child: Text(
-                                  booking.customer.firstName
-                                      .substring(0, 1)
-                                      .toUpperCase(),
+                                  booking.customer.firstName.initial('C'),
                                   style: const TextStyle(
                                     color: AppColors.textOnPrimary,
                                     fontWeight: FontWeight.bold,
@@ -323,7 +348,7 @@ class _BookingDetailsScreenState extends State<BookingDetailsScreen> {
                                       ),
                                     ),
                                     Text(
-                                      booking.customer.phone,
+                                      booking.customer.callablePhone ?? 'No phone available',
                                       style: TextStyle(
                                         color: Theme.of(context)
                                             .colorScheme
@@ -338,9 +363,10 @@ class _BookingDetailsScreenState extends State<BookingDetailsScreen> {
                                 icon: const Icon(Icons.phone),
                                 color: AppColors.primary,
                                 onPressed: () {
-                                  launchUrl(
-                                    Uri.parse('tel:${booking.customer.phone}'),
-                                  );
+                                  final phone = booking.customer.callablePhone;
+                                  if (phone != null && phone.isNotEmpty) {
+                                    launchUrl(Uri.parse('tel:$phone'));
+                                  }
                                 },
                               ),
                             ],
@@ -479,12 +505,62 @@ class _BookingDetailsScreenState extends State<BookingDetailsScreen> {
                       ),
                       child: const Text('Reject'),
                     ),
-                  ],
+                  ] else
+                    // Reached via a stale card tap (e.g. a job that was
+                    // already accepted/started/completed elsewhere before
+                    // this screen's data caught up) — explain why there's
+                    // no Accept/Reject instead of leaving a silent gap.
+                    _buildNonActionableStatusBanner(booking),
 
                   const SizedBox(height: AppSpacing.lg),
                 ],
               ),
             ),
+    );
+  }
+
+  Widget _buildNonActionableStatusBanner(BookingModel booking) {
+    late final IconData icon;
+    late final Color color;
+    late final String message;
+
+    if (booking.isCancelled) {
+      icon = Icons.cancel_outlined;
+      color = AppColors.error;
+      message = 'This job has been cancelled by the customer.';
+    } else if (booking.isCompleted) {
+      icon = Icons.check_circle_outline;
+      color = AppColors.success;
+      message = 'This job has already been completed.';
+    } else if (booking.isInProgress) {
+      icon = Icons.build_circle_outlined;
+      color = AppColors.primary;
+      message = 'This job is already in progress.';
+    } else {
+      // Accepted, or accepted by someone else while this screen was open.
+      icon = Icons.info_outline;
+      color = AppColors.primary;
+      message = 'This job has already been accepted and is no longer '
+          'awaiting a response.';
+    }
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(AppSpacing.md),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.1),
+        borderRadius: BorderRadius.circular(AppSpacing.radiusMD),
+        border: Border.all(color: color.withValues(alpha: 0.3)),
+      ),
+      child: Row(
+        children: [
+          Icon(icon, color: color),
+          const SizedBox(width: AppSpacing.sm),
+          Expanded(
+            child: Text(message, style: TextStyle(color: color)),
+          ),
+        ],
+      ),
     );
   }
 

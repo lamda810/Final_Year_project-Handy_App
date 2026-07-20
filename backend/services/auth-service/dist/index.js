@@ -28,9 +28,10 @@ else {
 // Health check endpoint
 app.get('/health', (req, res) => {
     res.status(200).json({
-        status: 'ok',
+        status: 'healthy',
         service: 'auth-service',
         timestamp: new Date().toISOString(),
+        mongodb: mongoose.connection.readyState === 1 ? 'connected' : 'disconnected',
     });
 });
 // API routes

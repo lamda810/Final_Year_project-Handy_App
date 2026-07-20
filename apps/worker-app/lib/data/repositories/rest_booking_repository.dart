@@ -14,7 +14,7 @@ class RestBookingRepository implements BookingRepository {
   Future<List<BookingModel>> getAvailableBookings() async {
     try {
       final response = await _dio.get(ApiEndpoints.availableBookings);
-      final list = response.data as List;
+      final list = (response.data['data'] ?? response.data) as List;
       return list.map((e) => BookingModel.fromJson(e)).toList();
     } catch (e) {
       rethrow;
@@ -36,7 +36,8 @@ class RestBookingRepository implements BookingRepository {
           'limit': limit,
         },
       );
-      final list = response.data['bookings'] as List;
+      final payload = response.data['data'] ?? response.data;
+      final list = payload is List ? payload : (payload['bookings'] ?? []) as List;
       return list.map((e) => BookingModel.fromJson(e)).toList();
     } catch (e) {
       rethrow;
@@ -45,14 +46,20 @@ class RestBookingRepository implements BookingRepository {
 
   @override
   Future<BookingModel> getBookingDetails(String bookingId) async {
-    final response = await _dio.get('/bookings/$bookingId');
-    return BookingModel.fromJson(response.data);
+    final response = await _dio.get(ApiEndpoints.bookingDetails(bookingId));
+    final data = response.data['data'] ?? response.data;
+    // Unlike accept/reject/start/complete (which return the booking flat
+    // under `data`), this endpoint wraps it as `data: { booking, review }`.
+    final bookingJson = (data is Map && data['booking'] != null)
+        ? data['booking']
+        : data;
+    return BookingModel.fromJson(bookingJson);
   }
 
   @override
   Future<BookingModel> acceptBooking(String bookingId) async {
     final response = await _dio.post(ApiEndpoints.acceptBooking(bookingId));
-    return BookingModel.fromJson(response.data);
+    return BookingModel.fromJson(response.data['data'] ?? response.data);
   }
 
   @override
@@ -72,7 +79,7 @@ class RestBookingRepository implements BookingRepository {
       ApiEndpoints.startBooking(bookingId),
       data: {if (beforeImages != null) 'beforeImages': beforeImages},
     );
-    return BookingModel.fromJson(response.data);
+    return BookingModel.fromJson(response.data['data'] ?? response.data);
   }
 
   @override
@@ -90,20 +97,27 @@ class RestBookingRepository implements BookingRepository {
         if (materialsCost != null) 'materialsCost': materialsCost,
       },
     );
-    return BookingModel.fromJson(response.data);
+    return BookingModel.fromJson(response.data['data'] ?? response.data);
   }
 
   @override
   Future<void> updateBookingLocation(String bookingId, double lat, double lng) async {
-    await _dio.post(
+    await _dio.put(
       ApiEndpoints.bookingLocation(bookingId),
-      data: {'lat': lat, 'lng': lng},
+      data: {
+        'coordinates': {'lat': lat, 'lng': lng},
+      },
     );
   }
 
   @override
   Future<void> resetWorkerAvailability() async {
-    await _dio.post('/users/worker/reset-status');
+    // The backend has no dedicated reset endpoint; going available again
+    // after a job is just an availability update.
+    await _dio.put(
+      ApiEndpoints.updateAvailability,
+      data: {'isAvailable': true},
+    );
   }
 
   @override

@@ -94,4 +94,22 @@ db.reviews.createIndex({ booking: 1 }, { unique: true });
 db.reviews.createIndex({ worker: 1, createdAt: -1 });
 db.reviews.createIndex({ customer: 1, createdAt: -1 });
 
+// Seed a local development admin account for the admin panel.
+db.users.updateOne(
+  { phone: '+920000000000' },
+  {
+    $setOnInsert: {
+      role: 'ADMIN',
+      phone: '+920000000000',
+      email: 'admin@local.handygo',
+      password: '$2a$12$O0TOrETy22mpgOH2uUD/IurYlM8YTkWo3HG1dHqz6LKsOkoMYWL3W',
+      isVerified: true,
+      isActive: true,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    },
+  },
+  { upsert: true }
+);
+
 print('Handy Go database initialized successfully!');

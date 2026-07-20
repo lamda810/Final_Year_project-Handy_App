@@ -25,6 +25,11 @@ export declare const estimateDuration: (req: Request, res: Response, next: impor
  */
 export declare const calculateTrustScore: (req: Request, res: Response, next: import("express").NextFunction) => void;
 /**
+ * Update trust score for a specific worker (Webhook/Internal)
+ * POST /api/matching/update-trust-score
+ */
+export declare const updateTrustScore: (req: Request, res: Response, next: import("express").NextFunction) => void;
+/**
  * Auto-replace worker for a booking
  * POST /api/matching/auto-replace-worker (internal)
  */
@@ -34,4 +39,9 @@ export declare const autoReplaceWorker: (req: Request, res: Response, next: impo
  * POST /api/matching/admin/update-trust-scores
  */
 export declare const batchUpdateTrustScores: (req: Request, res: Response, next: import("express").NextFunction) => void;
+/**
+ * Handle user Chatbot interactions
+ * POST /api/matching/chatbot/ask
+ */
+export declare const askChatbot: (req: Request, res: Response, next: import("express").NextFunction) => void;
 //# sourceMappingURL=matching.controller.d.ts.map

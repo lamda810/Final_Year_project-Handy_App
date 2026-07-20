@@ -6,6 +6,7 @@ import '../../blocs/auth/auth_state.dart';
 import '../../routes/app_routes.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/constants/app_spacing.dart';
+import '../../../core/utils/validators.dart';
 
 class EmailInputScreen extends StatefulWidget {
   const EmailInputScreen({super.key});
@@ -16,33 +17,30 @@ class EmailInputScreen extends StatefulWidget {
 
 class _EmailInputScreenState extends State<EmailInputScreen> {
   final _formKey = GlobalKey<FormState>();
-  final _emailController = TextEditingController();
+  final _phoneController = TextEditingController();
   bool _isLoading = false;
 
   @override
   void dispose() {
-    _emailController.dispose();
+    _phoneController.dispose();
     super.dispose();
   }
 
   void _sendOTP() {
     if (_formKey.currentState?.validate() ?? false) {
-      final email = _emailController.text.trim().toLowerCase();
+      final cleaned = _phoneController.text.trim().replaceAll(
+        RegExp(r'[\s\-\(\)]'),
+        '',
+      );
+      final phone = cleaned.startsWith('+92')
+          ? cleaned
+          : cleaned.startsWith('0')
+          ? '+92${cleaned.substring(1)}'
+          : '+92$cleaned';
       context.read<AuthBloc>().add(
-        SendOTPRequested(email: email, purpose: 'REGISTRATION'),
+        SendOTPRequested(phone: phone, purpose: 'REGISTRATION'),
       );
     }
-  }
-
-  String? _validateEmail(String? value) {
-    if (value == null || value.trim().isEmpty) {
-      return 'Please enter your email';
-    }
-    final emailRegex = RegExp(r'^[\w\.\-\+]+@[\w\-]+\.[\w\.\-]+$');
-    if (!emailRegex.hasMatch(value.trim())) {
-      return 'Please enter a valid email address';
-    }
-    return null;
   }
 
   @override
@@ -59,7 +57,7 @@ class _EmailInputScreenState extends State<EmailInputScreen> {
               Navigator.pushNamed(
                 context,
                 AppRoutes.otpVerification,
-                arguments: {'email': state.email, 'purpose': state.purpose},
+                arguments: {'phone': state.phone, 'purpose': state.purpose},
               );
             }
           });
@@ -87,7 +85,7 @@ class _EmailInputScreenState extends State<EmailInputScreen> {
 
                     // Header
                     Text(
-                      'Enter your email',
+                      'Enter your phone number',
                       style: TextStyle(
                         fontSize: 28,
                         fontWeight: FontWeight.bold,
@@ -96,7 +94,7 @@ class _EmailInputScreenState extends State<EmailInputScreen> {
                     ),
                     const SizedBox(height: AppSpacing.sm),
                     Text(
-                      'We\'ll send you an OTP to verify your email',
+                      'We\'ll send you an OTP to verify your phone number',
                       style: TextStyle(
                         fontSize: 16,
                         color: Theme.of(
@@ -106,18 +104,18 @@ class _EmailInputScreenState extends State<EmailInputScreen> {
                     ),
                     const SizedBox(height: AppSpacing.xl),
 
-                    // Email Input
+                    // Phone Input
                     TextFormField(
-                      controller: _emailController,
-                      keyboardType: TextInputType.emailAddress,
-                      autofillHints: const [AutofillHints.email],
+                      controller: _phoneController,
+                      keyboardType: TextInputType.phone,
+                      autofillHints: const [AutofillHints.telephoneNumber],
                       style: const TextStyle(fontSize: 18),
                       decoration: const InputDecoration(
-                        labelText: 'Email Address',
-                        hintText: 'you@example.com',
-                        prefixIcon: Icon(Icons.email_outlined),
+                        labelText: 'Phone Number',
+                        hintText: '+92 3XX XXXXXXX',
+                        prefixIcon: Icon(Icons.phone_outlined),
                       ),
-                      validator: _validateEmail,
+                      validator: Validators.validatePhone,
                       textInputAction: TextInputAction.done,
                       onFieldSubmitted: (_) => _sendOTP(),
                     ),
@@ -146,7 +144,7 @@ class _EmailInputScreenState extends State<EmailInputScreen> {
                           const SizedBox(width: AppSpacing.md),
                           Expanded(
                             child: Text(
-                              'Make sure this email is active. We\'ll send a 6-digit OTP to verify your identity.',
+                              'Make sure this phone number is active. We\'ll send a 6-digit OTP to verify your identity.',
                               style: TextStyle(
                                 fontSize: 13,
                                 color: Theme.of(
@@ -209,6 +207,44 @@ class _EmailInputScreenState extends State<EmailInputScreen> {
                         ],
                       ),
                       textAlign: TextAlign.center,
+                    ),
+
+                    const SizedBox(height: AppSpacing.lg),
+
+                    // Login Link
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Text(
+                          'Already have an account? ',
+                          style: TextStyle(
+                            color: Theme.of(
+                              context,
+                            ).colorScheme.onSurface.withValues(alpha: 0.7),
+                          ),
+                        ),
+                        GestureDetector(
+                          onTap: () {
+                            // Prefer popping back to an existing Login
+                            // screen (the normal case, reached via Login's
+                            // "Sign Up" link); fall back to pushing one if
+                            // this screen has nothing to pop to (e.g.
+                            // reached straight from onboarding).
+                            if (Navigator.canPop(context)) {
+                              Navigator.pop(context);
+                            } else {
+                              Navigator.pushNamed(context, AppRoutes.login);
+                            }
+                          },
+                          child: const Text(
+                            'Login',
+                            style: TextStyle(
+                              color: AppColors.primary,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ),
+                      ],
                     ),
 
                     const SizedBox(height: AppSpacing.lg),

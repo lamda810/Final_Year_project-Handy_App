@@ -1,11 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:get_it/get_it.dart';
 import 'package:intl/intl.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/constants/app_spacing.dart';
-import '../../../core/appwrite/appwrite_client.dart';
-import '../../../data/datasources/appwrite/appwrite_wallet_datasource.dart';
 import '../../../data/models/wallet_model.dart';
 
 /// Wallet screen showing balance and transactions
@@ -17,50 +14,24 @@ class WalletScreen extends StatefulWidget {
 }
 
 class _WalletScreenState extends State<WalletScreen> {
-  final AppwriteWalletDataSource _walletDS =
-      GetIt.instance<AppwriteWalletDataSource>();
-
-  double _balance = 0.0;
-  List<TransactionModel> _transactions = [];
-  bool _isLoading = true;
-  String? _userId;
-
-  @override
-  void initState() {
-    super.initState();
-    _loadWallet();
-  }
+  // TODO: Rewire to a REST wallet API once the backend exposes wallet
+  // endpoints. The old Appwrite Functions integration was removed with the
+  // migration to the Node backend.
+  final double _balance = 0.0;
+  final List<TransactionModel> _transactions = [];
+  final bool _isLoading = false;
 
   Future<void> _loadWallet() async {
-    setState(() => _isLoading = true);
-    try {
-      final user = await AppwriteClient.account.get();
-      _userId = user.$id;
-      final wallet = await _walletDS.getOrCreateWallet(_userId!);
-      final txResult = await _walletDS.getTransactions(
-        userId: _userId!,
-        limit: 20,
-      );
-      if (mounted) {
-        setState(() {
-          _balance = wallet.balance;
-          _transactions = txResult.transactions;
-          _isLoading = false;
-        });
-      }
-    } catch (e) {
-      if (mounted) {
-        setState(() => _isLoading = false);
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              'Failed to load wallet: ${e.toString().replaceAll("Exception: ", "")}',
-            ),
-            backgroundColor: AppColors.error,
-          ),
-        );
-      }
-    }
+    // Wallet backend not available yet; balance and transactions stay empty.
+  }
+
+  void _showWalletUnavailable() {
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('Wallet service is not available yet'),
+        behavior: SnackBarBehavior.floating,
+      ),
+    );
   }
 
   @override
@@ -600,7 +571,6 @@ class _WalletScreenState extends State<WalletScreen> {
   }
 
   void _showWithdrawDialog(BuildContext context) {
-    if (_userId == null) return;
     final controller = TextEditingController();
     showDialog(
       context: context,
@@ -632,26 +602,8 @@ class _WalletScreenState extends State<WalletScreen> {
                 return;
               }
               Navigator.pop(ctx);
-              try {
-                await _walletDS.requestWithdrawal(
-                  userId: _userId!,
-                  amount: amount,
-                );
-                if (!mounted) return;
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('Withdrawal request submitted')),
-                );
-                _loadWallet();
-              } catch (e) {
-                if (!mounted) return;
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(
-                    content: Text(
-                      'Withdrawal failed: ${e.toString().replaceAll("Exception: ", "")}',
-                    ),
-                  ),
-                );
-              }
+              if (!mounted) return;
+              _showWalletUnavailable();
             },
             child: const Text('Withdraw'),
           ),
@@ -788,32 +740,8 @@ class _WalletScreenState extends State<WalletScreen> {
   }
 
   void _processAddMoney(int amount) async {
-    if (_userId == null) return;
-
-    // TODO: Integrate client-side gateway SDK (JazzCash / Easypaisa / Stripe)
-    // to obtain a gatewayToken before calling topUpWallet.
-    // For now, the payment is simulated on the server-side.
-    try {
-      await _walletDS.topUpWallet(
-        userId: _userId!,
-        amount: amount.toDouble(),
-        paymentMethod: 'JAZZCASH', // TODO: Let user pick method
-      );
-      if (!mounted) return;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('Rs. $amount added to wallet')));
-      _loadWallet(); // Refresh balance & transactions
-    } catch (e) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            'Top-up failed: ${e.toString().replaceAll("Exception: ", "")}',
-          ),
-          backgroundColor: AppColors.error,
-        ),
-      );
-    }
+    // TODO: Integrate a payment gateway (JazzCash / Easypaisa / Stripe)
+    // once the backend exposes wallet top-up endpoints.
+    _showWalletUnavailable();
   }
 }

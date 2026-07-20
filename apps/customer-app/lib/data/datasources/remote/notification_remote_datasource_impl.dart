@@ -34,7 +34,8 @@ class NotificationRemoteDataSourceImpl implements NotificationRemoteDataSource {
   Future<int> getUnreadCount() async {
     try {
       final response = await _dio.get('/notifications/unread-count');
-      return response.data['count'] as int;
+      return (response.data['data']?['count'] ?? response.data['count'] ?? 0)
+          as int;
     } on DioException catch (e) {
       throw _handleDioError(e);
     }
@@ -43,7 +44,7 @@ class NotificationRemoteDataSourceImpl implements NotificationRemoteDataSource {
   @override
   Future<void> markAsRead(String notificationId) async {
     try {
-      await _dio.post('/notifications/$notificationId/read');
+      await _dio.put('/notifications/$notificationId/read');
     } on DioException catch (e) {
       throw _handleDioError(e);
     }
@@ -52,7 +53,7 @@ class NotificationRemoteDataSourceImpl implements NotificationRemoteDataSource {
   @override
   Future<void> markAllAsRead() async {
     try {
-      await _dio.post('/notifications/read-all');
+      await _dio.put('/notifications/read-all');
     } on DioException catch (e) {
       throw _handleDioError(e);
     }
@@ -79,7 +80,7 @@ class NotificationRemoteDataSourceImpl implements NotificationRemoteDataSource {
   @override
   Future<void> unregisterDevice(String deviceToken) async {
     try {
-      await _dio.post(
+      await _dio.delete(
         '/notifications/unregister-device',
         data: {'deviceToken': deviceToken},
       );

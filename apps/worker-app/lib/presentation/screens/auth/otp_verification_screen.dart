@@ -10,12 +10,12 @@ import '../../../core/constants/app_colors.dart';
 import '../../../core/constants/app_spacing.dart';
 
 class OtpVerificationScreen extends StatefulWidget {
-  final String email;
+  final String phone;
   final String purpose;
 
   const OtpVerificationScreen({
     super.key,
-    required this.email,
+    required this.phone,
     required this.purpose,
   });
 
@@ -66,7 +66,7 @@ class _OtpVerificationScreenState extends State<OtpVerificationScreen> {
   void _resendOTP() {
     if (_canResend) {
       context.read<AuthBloc>().add(
-        SendOTPRequested(email: widget.email, purpose: widget.purpose),
+        SendOTPRequested(phone: widget.phone, purpose: widget.purpose),
       );
       _startTimer();
     }
@@ -76,7 +76,7 @@ class _OtpVerificationScreenState extends State<OtpVerificationScreen> {
     if (otp.length == 6) {
       context.read<AuthBloc>().add(
         VerifyOTPRequested(
-          email: widget.email,
+          phone: widget.phone,
           code: otp,
           purpose: widget.purpose,
         ),
@@ -84,13 +84,13 @@ class _OtpVerificationScreenState extends State<OtpVerificationScreen> {
     }
   }
 
-  String get _maskedEmail {
-    final parts = widget.email.split('@');
-    if (parts.length == 2 && parts[0].length > 2) {
-      final name = parts[0];
-      return '${name.substring(0, 2)}${'*' * (name.length - 2)}@${parts[1]}';
+  String get _maskedPhone {
+    if (widget.phone.length > 4) {
+      final visible = widget.phone.substring(widget.phone.length - 4);
+      final masked = '*' * (widget.phone.length - 4);
+      return '$masked$visible';
     }
-    return widget.email;
+    return widget.phone;
   }
 
   @override
@@ -111,7 +111,7 @@ class _OtpVerificationScreenState extends State<OtpVerificationScreen> {
                   AppRoutes.resetPassword,
                   arguments: {
                     'tempToken': state.tempToken,
-                    'email': state.email,
+                    'phone': state.phone,
                   },
                 );
               }
@@ -124,7 +124,7 @@ class _OtpVerificationScreenState extends State<OtpVerificationScreen> {
                   AppRoutes.registration,
                   arguments: {
                     'tempToken': state.tempToken,
-                    'email': state.email,
+                    'phone': state.phone,
                   },
                 );
               }
@@ -167,7 +167,7 @@ class _OtpVerificationScreenState extends State<OtpVerificationScreen> {
                     shape: BoxShape.circle,
                   ),
                   child: const Icon(
-                    Icons.mark_email_read_outlined,
+                    Icons.sms_outlined,
                     size: 40,
                     color: AppColors.primary,
                   ),
@@ -187,7 +187,7 @@ class _OtpVerificationScreenState extends State<OtpVerificationScreen> {
                 const SizedBox(height: AppSpacing.sm),
 
                 Text(
-                  'Enter the 6-digit code sent to\n$_maskedEmail',
+                  'Enter the 6-digit code sent to\n$_maskedPhone',
                   style: TextStyle(
                     fontSize: 16,
                     color: Theme.of(

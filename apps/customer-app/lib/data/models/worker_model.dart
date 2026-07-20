@@ -140,12 +140,22 @@ class MatchedWorkerModel extends Equatable {
   });
 
   factory MatchedWorkerModel.fromJson(Map<String, dynamic> json) {
+    // The backend returns rating as a nested { average, count } object, not
+    // a flat number.
+    final ratingJson = json['rating'];
+    final ratingAverage = ratingJson is Map
+        ? (ratingJson['average'] ?? 0)
+        : (ratingJson ?? 0);
+    final ratingCount = ratingJson is Map
+        ? (ratingJson['count'] ?? 0)
+        : (json['ratingCount'] ?? 0);
+
     return MatchedWorkerModel(
       workerId: json['workerId'] ?? json['_id'] ?? '',
       name: json['name'] ?? '',
       profileImage: json['profileImage'],
-      rating: (json['rating'] ?? 0).toDouble(),
-      ratingCount: json['ratingCount'] ?? 0,
+      rating: (ratingAverage as num).toDouble(),
+      ratingCount: ratingCount as int,
       trustScore: json['trustScore'] ?? 50,
       distance: (json['distance'] ?? 0).toDouble(),
       estimatedArrival: json['estimatedArrival'] ?? 0,

@@ -14,12 +14,12 @@ import '../../../data/models/worker_model.dart';
 
 class RegistrationScreen extends StatefulWidget {
   final String tempToken;
-  final String email;
+  final String phone;
 
   const RegistrationScreen({
     super.key,
     required this.tempToken,
-    required this.email,
+    required this.phone,
   });
 
   @override
@@ -57,7 +57,18 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
   @override
   void initState() {
     super.initState();
-    _autoDetectPhoneNumber();
+    // Pre-fill with the number verified via OTP (strip +92, since the field
+    // shows a fixed +92 prefix and expects the local 10-digit number).
+    var verifiedPhone = widget.phone;
+    if (verifiedPhone.startsWith('+92')) {
+      verifiedPhone = verifiedPhone.substring(3);
+    } else if (verifiedPhone.startsWith('0')) {
+      verifiedPhone = verifiedPhone.substring(1);
+    }
+    _phoneController.text = verifiedPhone;
+    if (verifiedPhone.isEmpty) {
+      _autoDetectPhoneNumber();
+    }
   }
 
   /// Attempt to auto-detect SIM phone number and pre-fill the field
@@ -285,12 +296,13 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
 
                     const SizedBox(height: AppSpacing.md),
 
-                    // Phone (Optional) with SIM auto-detect
+                    // Verified phone number (from OTP step)
                     TextFormField(
                       controller: _phoneController,
+                      readOnly: true,
                       autofillHints: const [AutofillHints.telephoneNumber],
                       decoration: InputDecoration(
-                        labelText: 'Phone Number (Optional)',
+                        labelText: 'Phone Number (Verified)',
                         hintText: '3XX XXXXXXX',
                         prefixIcon: Container(
                           width: 80,

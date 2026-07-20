@@ -302,7 +302,7 @@ export default function WorkersPage() {
                     </TableCell>
                     <TableCell>
                       <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
-                        {worker.skills.slice(0, 2).map((skill, idx) => (
+                        {worker.skills.slice(0, 2).map((skill: Worker['skills'][number], idx: number) => (
                           <Chip
                             key={idx}
                             label={skill.category}

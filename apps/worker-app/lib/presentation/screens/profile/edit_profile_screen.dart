@@ -7,7 +7,8 @@ import '../../blocs/auth/auth_state.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/constants/app_spacing.dart';
 import '../../../data/models/worker_model.dart';
-import '../../../data/repositories/appwrite_worker_repository.dart';
+import '../../../domain/repositories/worker_repository.dart';
+import '../../../injection_container.dart';
 
 class EditProfileScreen extends StatefulWidget {
   const EditProfileScreen({super.key});
@@ -21,12 +22,13 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
   final _firstNameController = TextEditingController();
   final _lastNameController = TextEditingController();
   final _emailController = TextEditingController();
+  final _contactPhoneController = TextEditingController();
   final _serviceRadiusController = TextEditingController(text: '10');
   final _bankTitleController = TextEditingController();
   final _bankAccountController = TextEditingController();
   final _bankNameController = TextEditingController();
 
-  final AppwriteWorkerRepository _repository = AppwriteWorkerRepository();
+  final WorkerRepository _repository = sl<WorkerRepository>();
   bool _isSaving = false;
   bool _isLoading = true;
   WorkerModel? _worker;
@@ -71,6 +73,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     _firstNameController.text = worker.firstName;
     _lastNameController.text = worker.lastName;
     _emailController.text = worker.user.email ?? '';
+    _contactPhoneController.text = worker.contactPhone ?? '';
     _serviceRadiusController.text = worker.serviceRadius.toStringAsFixed(0);
     if (worker.bankDetails != null) {
       _bankTitleController.text = worker.bankDetails!.accountTitle;
@@ -84,6 +87,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     _firstNameController.dispose();
     _lastNameController.dispose();
     _emailController.dispose();
+    _contactPhoneController.dispose();
     _serviceRadiusController.dispose();
     _bankTitleController.dispose();
     _bankAccountController.dispose();
@@ -113,6 +117,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
         email: _emailController.text.trim().isNotEmpty
             ? _emailController.text.trim()
             : null,
+        contactPhone: _contactPhoneController.text.trim(),
         serviceRadius: double.tryParse(_serviceRadiusController.text),
         bankDetails: bankDetails,
       );
@@ -260,6 +265,26 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                         prefixIcon: Icon(Icons.email_outlined),
                       ),
                       keyboardType: TextInputType.emailAddress,
+                    ),
+
+                    const SizedBox(height: AppSpacing.md),
+
+                    TextFormField(
+                      controller: _contactPhoneController,
+                      decoration: const InputDecoration(
+                        labelText: 'Contact Number (Optional)',
+                        hintText: 'e.g. 03001234567',
+                        prefixIcon: Icon(Icons.call_outlined),
+                        helperText: 'Used by customers to call you',
+                      ),
+                      keyboardType: TextInputType.phone,
+                      validator: (v) {
+                        if (v == null || v.isEmpty) return null;
+                        final pattern = RegExp(r'^(\+92|0)?3[0-9]{9}$');
+                        return pattern.hasMatch(v)
+                            ? null
+                            : 'Enter a valid Pakistani mobile number';
+                      },
                     ),
 
                     const SizedBox(height: AppSpacing.xl),

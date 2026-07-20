@@ -1,4 +1,15 @@
 import { Request, Response } from 'express';
+import { UserRole } from '@handy-go/shared';
+declare global {
+    namespace Express {
+        interface Request {
+            user?: {
+                id: string;
+                role: UserRole;
+            };
+        }
+    }
+}
 /**
  * Trigger SOS emergency
  * POST /api/sos/trigger

@@ -151,6 +151,7 @@ class WorkerModel {
   final String firstName;
   final String lastName;
   final String? profileImage;
+  final String? contactPhone;
   final String cnic;
   final bool cnicVerified;
   final String? cnicFrontImage;
@@ -182,6 +183,7 @@ class WorkerModel {
     required this.firstName,
     required this.lastName,
     this.profileImage,
+    this.contactPhone,
     required this.cnic,
     required this.cnicVerified,
     this.cnicFrontImage,
@@ -211,6 +213,7 @@ class WorkerModel {
       firstName: json['firstName'] ?? '',
       lastName: json['lastName'] ?? '',
       profileImage: json['profileImage'],
+      contactPhone: json['contactPhone'],
       cnic: json['cnic'] ?? '',
       cnicVerified: json['cnicVerified'] ?? false,
       cnicFrontImage: json['cnicFrontImage'],
@@ -257,6 +260,7 @@ class WorkerModel {
       'firstName': firstName,
       'lastName': lastName,
       'profileImage': profileImage,
+      'contactPhone': contactPhone,
       'cnic': cnic,
       'cnicVerified': cnicVerified,
       'cnicFrontImage': cnicFrontImage,

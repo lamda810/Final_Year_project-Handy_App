@@ -76,6 +76,10 @@ export const publicRoutes = [
   '/api/auth/reset-password',
   '/health',
   '/api/health',
+  // Uploaded files are served statically and referenced by URL from
+  // authenticated responses (e.g. booking images) — the URL itself is
+  // the access control, same as any other static asset host.
+  '/uploads',
 ];
 
 /**

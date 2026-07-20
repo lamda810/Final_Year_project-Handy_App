@@ -3,8 +3,8 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'l10n/generated/app_localizations.dart';
 import 'core/theme/app_theme.dart';
+import 'core/navigation/app_navigator.dart';
 import 'core/routes/app_routes.dart';
-import 'core/services/push_notification_service.dart';
 import 'core/widgets/network_aware_widget.dart';
 import 'injection_container.dart';
 import 'presentation/blocs/auth/auth_bloc.dart';
@@ -44,18 +44,7 @@ class _HandyGoAppState extends State<HandyGoApp> {
         BlocProvider<ChatbotBloc>(create: (_) => sl<ChatbotBloc>()),
       ],
       child: BlocListener<AuthBloc, AuthState>(
-        listener: (context, state) {
-          final pushService = PushNotificationService();
-          if (state is Authenticated) {
-            // Register FCM token after authentication
-            pushService.requestPermission().then((_) {
-              pushService.getAndRegisterToken();
-            });
-          } else if (state is Unauthenticated) {
-            // Clean up FCM token on logout
-            pushService.unregisterToken();
-          }
-        },
+        listener: (_, __) {},
         child: ValueListenableBuilder<Locale>(
           valueListenable: HandyGoApp.localeNotifier,
           builder: (context, locale, _) {
@@ -63,6 +52,7 @@ class _HandyGoAppState extends State<HandyGoApp> {
               valueListenable: HandyGoApp.themeModeNotifier,
               builder: (context, themeMode, _) {
                 return MaterialApp(
+                  navigatorKey: appNavigatorKey,
                   title: 'Handy Go',
                   debugShowCheckedModeBanner: false,
                   theme: AppTheme.lightTheme,

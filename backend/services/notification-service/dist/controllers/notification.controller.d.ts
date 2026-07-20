@@ -1,4 +1,15 @@
 import { Request, Response, NextFunction } from 'express';
+import { UserRole } from '@handy-go/shared';
+declare global {
+    namespace Express {
+        interface Request {
+            user?: {
+                id: string;
+                role: UserRole;
+            };
+        }
+    }
+}
 /**
  * Send notification to a single user
  * POST /api/notifications/send

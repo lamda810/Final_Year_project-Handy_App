@@ -9,6 +9,7 @@ class CustomerModel extends Equatable {
   final String firstName;
   final String lastName;
   final String? profileImage;
+  final String? contactPhone;
   final List<AddressModel> addresses;
   final String preferredLanguage;
   final int totalBookings;
@@ -18,6 +19,7 @@ class CustomerModel extends Equatable {
     required this.firstName,
     required this.lastName,
     this.profileImage,
+    this.contactPhone,
     this.addresses = const [],
     this.preferredLanguage = 'en',
     this.totalBookings = 0,
@@ -29,6 +31,7 @@ class CustomerModel extends Equatable {
       firstName: json['firstName'] ?? '',
       lastName: json['lastName'] ?? '',
       profileImage: json['profileImage'],
+      contactPhone: json['contactPhone'],
       addresses:
           (json['addresses'] as List?)
               ?.map((a) => AddressModel.fromJson(a))
@@ -45,6 +48,7 @@ class CustomerModel extends Equatable {
       'firstName': firstName,
       'lastName': lastName,
       'profileImage': profileImage,
+      'contactPhone': contactPhone,
       'addresses': addresses.map((a) => a.toJson()).toList(),
       'preferredLanguage': preferredLanguage,
       'totalBookings': totalBookings,
@@ -58,6 +62,7 @@ class CustomerModel extends Equatable {
     String? firstName,
     String? lastName,
     String? profileImage,
+    String? contactPhone,
     List<AddressModel>? addresses,
     String? preferredLanguage,
     int? totalBookings,
@@ -67,6 +72,7 @@ class CustomerModel extends Equatable {
       firstName: firstName ?? this.firstName,
       lastName: lastName ?? this.lastName,
       profileImage: profileImage ?? this.profileImage,
+      contactPhone: contactPhone ?? this.contactPhone,
       addresses: addresses ?? this.addresses,
       preferredLanguage: preferredLanguage ?? this.preferredLanguage,
       totalBookings: totalBookings ?? this.totalBookings,
@@ -79,6 +85,7 @@ class CustomerModel extends Equatable {
     firstName,
     lastName,
     profileImage,
+    contactPhone,
     addresses,
     preferredLanguage,
     totalBookings,

@@ -12,6 +12,11 @@ class BookingRemoteDataSourceImpl implements BookingRemoteDataSource {
 
   BookingRemoteDataSourceImpl({required Dio dio}) : _dio = dio;
 
+  /// Maps a UI display name ("AC Repair") to the backend enum ("AC_REPAIR").
+  /// Values already in enum form pass through unchanged.
+  String _toCategoryEnum(String category) =>
+      category.trim().toUpperCase().replaceAll(' ', '_');
+
   @override
   Future<ProblemAnalysisResult> analyzeProblem({
     required String description,
@@ -21,8 +26,8 @@ class BookingRemoteDataSourceImpl implements BookingRemoteDataSource {
       final response = await _dio.post(
         '/matching/analyze-problem',
         data: {
-          'description': description,
-          if (category != null) 'category': category,
+          'problemDescription': description,
+          if (category != null) 'serviceCategory': _toCategoryEnum(category),
         },
       );
       return ProblemAnalysisResult.fromJson(response.data);
@@ -43,9 +48,8 @@ class BookingRemoteDataSourceImpl implements BookingRemoteDataSource {
       final response = await _dio.post(
         '/matching/find-workers',
         data: {
-          'serviceCategory': serviceCategory,
-          'lat': lat,
-          'lng': lng,
+          'serviceCategory': _toCategoryEnum(serviceCategory),
+          'location': {'lat': lat, 'lng': lng},
           'scheduledDateTime': scheduledDateTime.toIso8601String(),
           'isUrgent': isUrgent,
         },
@@ -59,9 +63,21 @@ class BookingRemoteDataSourceImpl implements BookingRemoteDataSource {
   @override
   Future<CreateBookingResult> createBooking(BookingCreateRequest request) async {
     try {
+      final json = request.toJson();
+      json['serviceCategory'] = _toCategoryEnum(request.serviceCategory);
+      // The backend only accepts http(s) URLs for images; local picker file
+      // paths would fail validation (no upload endpoint exists yet).
+      final urlImages = (json['images'] as List?)
+          ?.where((image) => image.toString().startsWith('http'))
+          .toList();
+      if (urlImages == null || urlImages.isEmpty) {
+        json.remove('images');
+      } else {
+        json['images'] = urlImages;
+      }
       final response = await _dio.post(
         '/bookings',
-        data: request.toJson(),
+        data: json,
       );
       return CreateBookingResult.fromJson(response.data);
     } on DioException catch (e) {
@@ -79,7 +95,7 @@ class BookingRemoteDataSourceImpl implements BookingRemoteDataSource {
         '/bookings/$bookingId/select-worker',
         data: {'workerId': workerId},
       );
-      return BookingModel.fromJson(response.data);
+      return BookingModel.fromJson(response.data['data'] ?? response.data);
     } on DioException catch (e) {
       throw _handleDioError(e);
     }
@@ -125,7 +141,13 @@ class BookingRemoteDataSourceImpl implements BookingRemoteDataSource {
   Future<BookingModel> getBookingDetails(String bookingId) async {
     try {
       final response = await _dio.get('/bookings/$bookingId');
-      return BookingModel.fromJson(response.data);
+      final data = response.data['data'] ?? response.data;
+      // Unlike list/create/cancel endpoints (which return the booking flat
+      // under `data`), this one wraps it as `data: { booking, review }`.
+      final bookingJson = (data is Map && data['booking'] != null)
+          ? data['booking']
+          : data;
+      return BookingModel.fromJson(bookingJson);
     } on DioException catch (e) {
       throw _handleDioError(e);
     }
@@ -177,8 +199,7 @@ class BookingRemoteDataSourceImpl implements BookingRemoteDataSource {
           if (bookingId != null) 'bookingId': bookingId,
           'reason': reason,
           'description': description,
-          'lat': lat,
-          'lng': lng,
+          'location': {'lat': lat, 'lng': lng},
         },
       );
       return SOSTriggerResult.fromJson(response.data);
@@ -197,9 +218,9 @@ class BookingRemoteDataSourceImpl implements BookingRemoteDataSource {
       final response = await _dio.post(
         '/matching/estimate-price',
         data: {
-          'serviceCategory': serviceCategory,
+          'serviceCategory': _toCategoryEnum(serviceCategory),
           'problemDescription': problemDescription,
-          'city': city,
+          'location': {'city': city},
         },
       );
       return PriceEstimate.fromJson(response.data);
@@ -217,11 +238,25 @@ class BookingRemoteDataSourceImpl implements BookingRemoteDataSource {
       final response = await _dio.post(
         '/matching/estimate-duration',
         data: {
-          'serviceCategory': serviceCategory,
+          'serviceCategory': _toCategoryEnum(serviceCategory),
           'problemDescription': problemDescription,
         },
       );
       return response.data['duration'] as int;
+    } on DioException catch (e) {
+      throw _handleDioError(e);
+    }
+  }
+
+  @override
+  Future<String> uploadImage(String filePath) async {
+    try {
+      final formData = FormData.fromMap({
+        'image': await MultipartFile.fromFile(filePath),
+      });
+      final response = await _dio.post('/uploads', data: formData);
+      final data = response.data['data'] ?? response.data;
+      return data['url'] as String;
     } on DioException catch (e) {
       throw _handleDioError(e);
     }

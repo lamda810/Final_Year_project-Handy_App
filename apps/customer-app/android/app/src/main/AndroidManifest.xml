@@ -14,6 +14,9 @@
     <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE"/>
     <uses-permission android:name="android.permission.READ_MEDIA_IMAGES"/>
 
+    <!-- Microphone permission for voice input (problem description) -->
+    <uses-permission android:name="android.permission.RECORD_AUDIO"/>
+
     <!-- Phone call permission for contacting workers -->
     <uses-permission android:name="android.permission.CALL_PHONE"/>
 

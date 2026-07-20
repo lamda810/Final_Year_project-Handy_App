@@ -7,14 +7,17 @@ abstract class UserRemoteDataSource {
     String? firstName,
     String? lastName,
     String? email,
-    String? phone,
+    String? contactPhone,
     String? profileImage,
     String? preferredLanguage,
   });
   Future<List<AddressModel>> getAddresses();
-  Future<AddressModel> addAddress(AddressModel address);
-  Future<AddressModel> updateAddress(String addressId, AddressModel address);
-  Future<void> setDefaultAddress(String addressId);
+  // The backend returns the customer's full, authoritative address list on
+  // every mutation (not just the changed one), so these return the whole
+  // list rather than a single AddressModel.
+  Future<List<AddressModel>> addAddress(AddressModel address);
+  Future<List<AddressModel>> updateAddress(String addressId, AddressModel address);
+  Future<List<AddressModel>> setDefaultAddress(String addressId);
   Future<void> deleteAddress(String addressId);
   Future<void> deleteAccount();
 }

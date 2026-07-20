@@ -32,7 +32,7 @@ export const getProfile = asyncHandler(async (req: Request, res: Response) => {
  */
 export const updateProfile = asyncHandler(async (req: Request, res: Response) => {
   const userId = req.user!.id;
-  const { firstName, lastName, email, profileImage, skills, serviceRadius, availability, bankDetails } = req.body;
+  const { firstName, lastName, email, profileImage, contactPhone, skills, serviceRadius, availability, bankDetails } = req.body;
 
   const worker = await Worker.findOne({ user: userId });
 
@@ -44,6 +44,7 @@ export const updateProfile = asyncHandler(async (req: Request, res: Response) =>
   if (firstName) worker.firstName = firstName;
   if (lastName) worker.lastName = lastName;
   if (profileImage) worker.profileImage = profileImage;
+  if (contactPhone !== undefined) worker.contactPhone = contactPhone || undefined;
   if (skills) {
     worker.skills = skills.map((skill: any) => ({
       ...skill,

@@ -19,7 +19,7 @@ class UserRepositoryImpl implements UserRepository {
     String? firstName,
     String? lastName,
     String? email,
-    String? phone,
+    String? contactPhone,
     String? profileImage,
     String? preferredLanguage,
   }) async {
@@ -27,7 +27,7 @@ class UserRepositoryImpl implements UserRepository {
       firstName: firstName,
       lastName: lastName,
       email: email,
-      phone: phone,
+      contactPhone: contactPhone,
       profileImage: profileImage,
       preferredLanguage: preferredLanguage,
     );
@@ -39,12 +39,12 @@ class UserRepositoryImpl implements UserRepository {
   }
 
   @override
-  Future<AddressModel> addAddress(AddressModel address) async {
+  Future<List<AddressModel>> addAddress(AddressModel address) async {
     return await _remoteDataSource.addAddress(address);
   }
 
   @override
-  Future<AddressModel> updateAddress(
+  Future<List<AddressModel>> updateAddress(
     String addressId,
     AddressModel address,
   ) async {
@@ -52,8 +52,8 @@ class UserRepositoryImpl implements UserRepository {
   }
 
   @override
-  Future<void> setDefaultAddress(String addressId) async {
-    await _remoteDataSource.setDefaultAddress(addressId);
+  Future<List<AddressModel>> setDefaultAddress(String addressId) async {
+    return await _remoteDataSource.setDefaultAddress(addressId);
   }
 
   @override

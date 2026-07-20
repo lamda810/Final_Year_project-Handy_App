@@ -183,6 +183,7 @@ class AppRouter {
           SOSScreen(
             bookingId: args?['bookingId'],
             workerName: args?['workerName'],
+            workerPhone: args?['workerPhone'],
           ),
           settings,
         );

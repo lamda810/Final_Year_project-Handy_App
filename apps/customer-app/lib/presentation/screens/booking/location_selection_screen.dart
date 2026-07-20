@@ -21,6 +21,11 @@ class LocationSelectionScreen extends StatefulWidget {
 }
 
 class _LocationSelectionScreenState extends State<LocationSelectionScreen> {
+  static const bool _googleMapsEnabled = bool.fromEnvironment(
+    'ENABLE_GOOGLE_MAPS',
+    defaultValue: false,
+  );
+
   final _addressController = TextEditingController();
   String _selectedCity = 'Karachi';
   bool _saveAddress = false;
@@ -43,6 +48,20 @@ class _LocationSelectionScreenState extends State<LocationSelectionScreen> {
     'Peshawar',
     'Quetta',
   ];
+
+  // Approximate city centers, used as a last-resort fallback when a
+  // manually-typed address can't be geocoded — so worker matching always
+  // gets a real coordinate instead of silently defaulting to (0, 0).
+  static const Map<String, (double, double)> _cityCenters = {
+    'Karachi': (24.8607, 67.0011),
+    'Lahore': (31.5497, 74.3436),
+    'Islamabad': (33.6844, 73.0479),
+    'Rawalpindi': (33.5651, 73.0169),
+    'Faisalabad': (31.4504, 73.1350),
+    'Multan': (30.1575, 71.5249),
+    'Peshawar': (34.0151, 71.5249),
+    'Quetta': (30.1798, 66.9750),
+  };
 
   @override
   void initState() {
@@ -183,13 +202,44 @@ class _LocationSelectionScreenState extends State<LocationSelectionScreen> {
     }
   }
 
-  void _confirmLocation() {
+  Future<void> _confirmLocation() async {
     if (_addressController.text.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Please enter or select an address')),
       );
       return;
     }
+
+    // A manually-typed address (as opposed to "Use current location" or a
+    // saved address) never sets _latitude/_longitude. Without this, worker
+    // matching/distance calculations would silently receive (0, 0). Try to
+    // geocode the typed text; if that fails, fall back to the selected
+    // city's approximate center so we always send a real coordinate.
+    if (_latitude == null || _longitude == null) {
+      setState(() => _isLoadingLocation = true);
+      try {
+        final results = await locationFromAddress(
+          '${_addressController.text}, $_selectedCity, Pakistan',
+        );
+        if (results.isNotEmpty) {
+          _latitude = results.first.latitude;
+          _longitude = results.first.longitude;
+        }
+      } catch (_) {
+        // Geocoding failed (e.g. unresolvable text) — fall through to the
+        // city-center fallback below.
+      }
+      if (_latitude == null || _longitude == null) {
+        final center = _cityCenters[_selectedCity];
+        if (center != null) {
+          _latitude = center.$1;
+          _longitude = center.$2;
+        }
+      }
+      if (mounted) setState(() => _isLoadingLocation = false);
+    }
+
+    if (!mounted) return;
 
     // Save address if checkbox is checked
     if (_saveAddress && _addressController.text.isNotEmpty) {
@@ -256,71 +306,73 @@ class _LocationSelectionScreenState extends State<LocationSelectionScreen> {
                 SizedBox(
                   height: 250,
                   width: double.infinity,
-                  child: GoogleMap(
-                    initialCameraPosition: CameraPosition(
-                      target: LatLng(
-                        _latitude ?? 24.8607, // Default: Karachi
-                        _longitude ?? 67.0011,
-                      ),
-                      zoom: 14,
-                    ),
-                    markers: _latitude != null && _longitude != null
-                        ? {
-                            Marker(
-                              markerId: const MarkerId('selected'),
-                              position: LatLng(_latitude!, _longitude!),
-                              icon: BitmapDescriptor.defaultMarkerWithHue(
-                                BitmapDescriptor.hueRed,
-                              ),
+                  child: _googleMapsEnabled
+                      ? GoogleMap(
+                          initialCameraPosition: CameraPosition(
+                            target: LatLng(
+                              _latitude ?? 24.8607, // Default: Karachi
+                              _longitude ?? 67.0011,
                             ),
-                          }
-                        : {},
-                    myLocationEnabled: true,
-                    myLocationButtonEnabled: false,
-                    zoomControlsEnabled: false,
-                    onMapCreated: (controller) {
-                      _mapController = controller;
-                    },
-                    onTap: (position) async {
-                      setState(() {
-                        _latitude = position.latitude;
-                        _longitude = position.longitude;
-                        _selectedAddressIndex = -1;
-                        _addressController.text = 'Loading address...';
-                      });
-                      // Reverse geocode the tapped position
-                      try {
-                        final placemarks = await placemarkFromCoordinates(
-                          position.latitude,
-                          position.longitude,
-                        );
-                        if (placemarks.isNotEmpty && mounted) {
-                          final place = placemarks.first;
-                          final address = [
-                            place.street,
-                            place.subLocality,
-                            place.locality,
-                          ].where((s) => s != null && s.isNotEmpty).join(', ');
-                          setState(() {
-                            _addressController.text = address.isNotEmpty
-                                ? address
-                                : '${position.latitude.toStringAsFixed(6)}, ${position.longitude.toStringAsFixed(6)}';
-                            if (place.locality != null &&
-                                _cities.contains(place.locality)) {
-                              _selectedCity = place.locality!;
+                            zoom: 14,
+                          ),
+                          markers: _latitude != null && _longitude != null
+                              ? {
+                                  Marker(
+                                    markerId: const MarkerId('selected'),
+                                    position: LatLng(_latitude!, _longitude!),
+                                    icon: BitmapDescriptor.defaultMarkerWithHue(
+                                      BitmapDescriptor.hueRed,
+                                    ),
+                                  ),
+                                }
+                              : {},
+                          myLocationEnabled: true,
+                          myLocationButtonEnabled: false,
+                          zoomControlsEnabled: false,
+                          onMapCreated: (controller) {
+                            _mapController = controller;
+                          },
+                          onTap: (position) async {
+                            setState(() {
+                              _latitude = position.latitude;
+                              _longitude = position.longitude;
+                              _selectedAddressIndex = -1;
+                              _addressController.text = 'Loading address...';
+                            });
+                            // Reverse geocode the tapped position
+                            try {
+                              final placemarks = await placemarkFromCoordinates(
+                                position.latitude,
+                                position.longitude,
+                              );
+                              if (placemarks.isNotEmpty && mounted) {
+                                final place = placemarks.first;
+                                final address = [
+                                  place.street,
+                                  place.subLocality,
+                                  place.locality,
+                                ].where((s) => s != null && s.isNotEmpty).join(', ');
+                                setState(() {
+                                  _addressController.text = address.isNotEmpty
+                                      ? address
+                                      : '${position.latitude.toStringAsFixed(6)}, ${position.longitude.toStringAsFixed(6)}';
+                                  if (place.locality != null &&
+                                      _cities.contains(place.locality)) {
+                                    _selectedCity = place.locality!;
+                                  }
+                                });
+                              }
+                            } catch (_) {
+                              if (mounted) {
+                                setState(() {
+                                  _addressController.text =
+                                      '${position.latitude.toStringAsFixed(6)}, ${position.longitude.toStringAsFixed(6)}';
+                                });
+                              }
                             }
-                          });
-                        }
-                      } catch (_) {
-                        if (mounted) {
-                          setState(() {
-                            _addressController.text =
-                                '${position.latitude.toStringAsFixed(6)}, ${position.longitude.toStringAsFixed(6)}';
-                          });
-                        }
-                      }
-                    },
-                  ),
+                          },
+                        )
+                      : _buildMapFallback(theme, colorScheme),
                 ),
 
                 // Content
@@ -444,18 +496,27 @@ class _LocationSelectionScreenState extends State<LocationSelectionScreen> {
                         const SizedBox(height: AppSpacing.md),
 
                         // City dropdown
+                        // _selectedCity can come from GPS reverse-geocoding
+                        // or a saved address, neither guaranteed to be one
+                        // of the cities below — include it dynamically so
+                        // DropdownButtonFormField never asserts on a value
+                        // missing from its own items.
                         DropdownButtonFormField<String>(
                           initialValue: _selectedCity,
                           decoration: const InputDecoration(
                             labelText: 'City',
                             prefixIcon: Icon(Icons.location_city_outlined),
                           ),
-                          items: _cities.map((city) {
-                            return DropdownMenuItem(
-                              value: city,
-                              child: Text(city),
-                            );
-                          }).toList(),
+                          items:
+                              {
+                                ..._cities,
+                                _selectedCity,
+                              }.map((city) {
+                                return DropdownMenuItem(
+                                  value: city,
+                                  child: Text(city),
+                                );
+                              }).toList(),
                           onChanged: (value) {
                             setState(() => _selectedCity = value!);
                           },
@@ -505,6 +566,51 @@ class _LocationSelectionScreenState extends State<LocationSelectionScreen> {
             ),
           );
         },
+      ),
+    );
+  }
+
+  Widget _buildMapFallback(ThemeData theme, ColorScheme colorScheme) {
+    return Container(
+      padding: const EdgeInsets.all(AppSpacing.lg),
+      decoration: BoxDecoration(
+        color: colorScheme.surface,
+        borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
+        boxShadow: [
+          BoxShadow(
+            color: theme.shadowColor.withValues(alpha: 0.08),
+            blurRadius: 10,
+          ),
+        ],
+      ),
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(
+            Icons.map_outlined,
+            size: 40,
+            color: colorScheme.onSurface.withValues(alpha: 0.65),
+          ),
+          const SizedBox(height: AppSpacing.md),
+          Text(
+            'Map preview is disabled in local mode',
+            style: TextStyle(
+              fontSize: 16,
+              fontWeight: FontWeight.w600,
+              color: colorScheme.onSurface,
+            ),
+            textAlign: TextAlign.center,
+          ),
+          const SizedBox(height: AppSpacing.sm),
+          Text(
+            'You can still use current location, select a saved address, or enter your address manually.',
+            style: TextStyle(
+              fontSize: 13,
+              color: colorScheme.onSurface.withValues(alpha: 0.7),
+            ),
+            textAlign: TextAlign.center,
+          ),
+        ],
       ),
     );
   }

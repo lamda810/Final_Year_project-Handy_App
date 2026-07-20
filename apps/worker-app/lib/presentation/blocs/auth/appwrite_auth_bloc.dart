@@ -1,25 +1,25 @@
 import 'package:flutter_bloc/flutter_bloc.dart';
 import '../../../core/utils/error_mapper.dart';
 import '../../../core/services/location_service.dart';
-import '../../../data/repositories/appwrite_auth_repository.dart';
-import '../../../data/repositories/appwrite_worker_repository.dart';
-import '../../../data/models/worker_model.dart';
+import '../../../domain/repositories/auth_repository.dart';
+import '../../../domain/repositories/worker_repository.dart';
 import 'auth_event.dart';
 import 'auth_state.dart';
 
-/// AuthBloc for Appwrite backend.
+/// AuthBloc for worker authentication.
 ///
-/// Uses [AppwriteAuthRepository] and [AppwriteWorkerRepository]
-/// to authenticate workers via email OTP.
+/// Depends on the [AuthRepository]/[WorkerRepository] interfaces so it works
+/// against whichever backend is wired up in `injection_container.dart`
+/// (REST or Appwrite).
 class AuthBloc extends Bloc<AuthEvent, AuthState> {
-  final AppwriteAuthRepository _authRepository;
-  final AppwriteWorkerRepository _workerRepository;
+  final AuthRepository _authRepository;
+  final WorkerRepository _workerRepository;
 
   AuthBloc({
-    AppwriteAuthRepository? authRepository,
-    AppwriteWorkerRepository? workerRepository,
-  }) : _authRepository = authRepository ?? AppwriteAuthRepository(),
-       _workerRepository = workerRepository ?? AppwriteWorkerRepository(),
+    required AuthRepository authRepository,
+    required WorkerRepository workerRepository,
+  }) : _authRepository = authRepository,
+       _workerRepository = workerRepository,
        super(AuthInitial()) {
     on<CheckAuthStatus>(_onCheckAuthStatus);
     on<SendOTPRequested>(_onSendOTP);
@@ -56,8 +56,8 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
   ) async {
     emit(AuthLoading());
     try {
-      await _authRepository.sendOTP(event.email, event.purpose);
-      emit(OTPSent(email: event.email, purpose: event.purpose));
+      await _authRepository.sendOTP(event.phone, event.purpose);
+      emit(OTPSent(phone: event.phone, purpose: event.purpose));
     } catch (e) {
       emit(AuthError(message: ErrorMapper.toUserMessage(e)));
     }
@@ -70,15 +70,15 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
     emit(AuthLoading());
     try {
       final response = await _authRepository.verifyOTP(
-        event.email,
+        event.phone,
         event.code,
         event.purpose,
       );
       emit(
         OTPVerified(
           isNewUser: response['isNewUser'] ?? true,
-          tempToken: response['userId'] ?? '',
-          email: event.email,
+          tempToken: response['tempToken'] ?? '',
+          phone: event.phone,
         ),
       );
     } catch (e) {
@@ -92,7 +92,7 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
   ) async {
     emit(AuthLoading());
     try {
-      final response = await _authRepository.registerWorker(
+      await _authRepository.registerWorker(
         tempToken: event.tempToken,
         firstName: event.firstName,
         lastName: event.lastName,
@@ -102,7 +102,7 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
         skills: event.skills,
       );
 
-      final worker = WorkerModel.fromJson(response['worker'] ?? {});
+      final worker = await _workerRepository.getProfile();
       emit(Authenticated(worker: worker));
     } catch (e) {
       emit(AuthError(message: ErrorMapper.toUserMessage(e)));
@@ -148,8 +148,8 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
   ) async {
     emit(AuthLoading());
     try {
-      await _authRepository.forgotPassword(event.email);
-      emit(OTPSent(email: event.email, purpose: 'PASSWORD_RESET'));
+      await _authRepository.forgotPassword(event.phone);
+      emit(OTPSent(phone: event.phone, purpose: 'PASSWORD_RESET'));
     } catch (e) {
       emit(AuthError(message: ErrorMapper.toUserMessage(e)));
     }

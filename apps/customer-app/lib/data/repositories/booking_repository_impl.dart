@@ -47,6 +47,11 @@ class BookingRepositoryImpl implements BookingRepository {
   }
 
   @override
+  Future<String> uploadImage(String filePath) async {
+    return await _remoteDataSource.uploadImage(filePath);
+  }
+
+  @override
   Future<BookingModel> selectWorker({
     required String bookingId,
     required String workerId,

@@ -25,6 +25,7 @@ export interface ICustomer extends Document {
   firstName: string;
   lastName: string;
   profileImage?: string;
+  contactPhone?: string;
   addresses: IAddress[];
   preferredLanguage: SupportedLanguage;
   totalBookings: number;
@@ -111,6 +112,11 @@ const customerSchema = new Schema<ICustomer, ICustomerModel>(
     profileImage: {
       type: String,
       trim: true,
+    },
+    contactPhone: {
+      type: String,
+      trim: true,
+      match: [/^(\+92|0)?3[0-9]{9}$/, 'Contact number must be a valid Pakistani mobile number'],
     },
     addresses: {
       type: [addressSchema],

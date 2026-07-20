@@ -201,7 +201,7 @@ export const selectWorker = asyncHandler(async (req: Request, res: Response) => 
 
   // Populate worker info for response
   const populatedBooking = await Booking.findById(bookingId)
-    .populate('worker', 'firstName lastName profileImage rating trustScore');
+    .populate('worker', 'firstName lastName profileImage rating trustScore contactPhone');
 
   return successResponse(res, populatedBooking, 'Worker selected successfully');
 });
@@ -230,7 +230,7 @@ export const getCustomerBookings = asyncHandler(async (req: Request, res: Respon
 
   const [bookings, total] = await Promise.all([
     Booking.find(filter)
-      .populate('worker', 'firstName lastName profileImage rating trustScore')
+      .populate('worker', 'firstName lastName profileImage rating trustScore contactPhone')
       .sort({ createdAt: -1 })
       .skip(skip)
       .limit(limitNum),
@@ -251,27 +251,41 @@ export const getBookingDetails = asyncHandler(async (req: Request, res: Response
 
   let booking;
 
+  // 'contactPhone' is the optional alternate number set on the Customer/
+  // Worker profile; nested-populating 'user' with 'phone' provides the
+  // fallback login phone for calling when no contactPhone is set.
+  const workerPopulate = {
+    path: 'worker',
+    select: 'firstName lastName profileImage rating trustScore currentLocation contactPhone user',
+    populate: { path: 'user', select: 'phone' },
+  };
+  const customerPopulate = {
+    path: 'customer',
+    select: 'firstName lastName profileImage contactPhone user',
+    populate: { path: 'user', select: 'phone' },
+  };
+
   if (userRole === 'CUSTOMER') {
     const customer = await Customer.findOne({ user: userId });
     if (!customer) {
       return notFoundResponse(res, 'Customer profile not found');
     }
     booking = await Booking.findOne({ _id: bookingId, customer: customer._id })
-      .populate('worker', 'firstName lastName profileImage rating trustScore currentLocation')
-      .populate('customer', 'firstName lastName profileImage');
+      .populate(workerPopulate)
+      .populate(customerPopulate);
   } else if (userRole === 'WORKER') {
     const worker = await Worker.findOne({ user: userId });
     if (!worker) {
       return notFoundResponse(res, 'Worker profile not found');
     }
     booking = await Booking.findOne({ _id: bookingId, worker: worker._id })
-      .populate('worker', 'firstName lastName profileImage rating trustScore')
-      .populate('customer', 'firstName lastName profileImage');
+      .populate(workerPopulate)
+      .populate(customerPopulate);
   } else {
     // Admin can view any booking
     booking = await Booking.findById(bookingId)
-      .populate('worker', 'firstName lastName profileImage rating trustScore')
-      .populate('customer', 'firstName lastName profileImage');
+      .populate(workerPopulate)
+      .populate(customerPopulate);
   }
 
   if (!booking) {

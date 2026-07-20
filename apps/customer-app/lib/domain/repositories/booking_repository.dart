@@ -229,6 +229,9 @@ abstract class BookingRepository {
   /// Create a new booking
   Future<CreateBookingResult> createBooking(BookingCreateRequest request);
 
+  /// Upload a local image file and return its server-hosted URL.
+  Future<String> uploadImage(String filePath);
+
   /// Select a worker for booking
   Future<BookingModel> selectWorker({
     required String bookingId,

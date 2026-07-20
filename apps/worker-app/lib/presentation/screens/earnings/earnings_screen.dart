@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
-import '../../../core/appwrite/appwrite_client.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/constants/app_spacing.dart';
-import '../../../data/datasources/appwrite_wallet_datasource.dart';
-import '../../../data/repositories/appwrite_booking_repository.dart';
-import '../../../data/repositories/appwrite_worker_repository.dart';
+import '../../../domain/repositories/booking_repository.dart';
+import '../../../domain/repositories/wallet_repository.dart';
+import '../../../domain/repositories/worker_repository.dart';
+import '../../../injection_container.dart';
 
 class EarningsScreen extends StatefulWidget {
   const EarningsScreen({super.key});
@@ -14,13 +14,11 @@ class EarningsScreen extends StatefulWidget {
 }
 
 class _EarningsScreenState extends State<EarningsScreen> {
-  final AppwriteWorkerRepository _repository = AppwriteWorkerRepository();
-  final AppwriteBookingRepository _bookingRepository =
-      AppwriteBookingRepository();
-  final AppwriteWalletDataSource _walletDS = AppwriteWalletDataSource();
+  final WorkerRepository _repository = sl<WorkerRepository>();
+  final BookingRepository _bookingRepository = sl<BookingRepository>();
+  final WalletRepository _walletDS = sl<WalletRepository>();
   bool _isLoading = true;
   String _selectedPeriod = 'week';
-  String? _userId;
 
   double _totalEarnings = 0;
   double _pendingEarnings = 0;
@@ -39,9 +37,6 @@ class _EarningsScreenState extends State<EarningsScreen> {
     });
 
     try {
-      // Fetch current user ID if not cached
-      _userId ??= (await AppwriteClient.account.get()).$id;
-
       DateTime startDate;
       final now = DateTime.now();
 
@@ -97,20 +92,34 @@ class _EarningsScreenState extends State<EarningsScreen> {
       }
 
       setState(() {
-        _totalEarnings = (data['total'] ?? 0).toDouble();
-        _totalJobs = data['count'] ?? 0;
+        _totalEarnings =
+            ((data['totalEarnings'] ?? data['total']) ?? 0).toDouble();
+        _totalJobs = (data['completedJobs'] ?? data['count'] ?? 0) as int;
         _pendingEarnings = pending;
-        // Convert category breakdown map to list
-        final breakdownMap = data['breakdown'] as Map<String, dynamic>? ?? {};
-        _earningsBreakdown = breakdownMap.entries
-            .map(
-              (e) => {
-                'service': e.key.replaceAll('_', ' '),
-                'amount': e.value,
-                'date': periodLabel,
-              },
-            )
-            .toList();
+        final breakdown = data['breakdown'];
+        if (breakdown is List) {
+          _earningsBreakdown = breakdown
+              .map<Map<String, dynamic>>(
+                (item) => {
+                  'service': item['bookingNumber'] ?? item['service'] ?? 'Job',
+                  'amount': item['amount'] ?? 0,
+                  'date': item['date'] ?? periodLabel,
+                },
+              )
+              .toList();
+        } else {
+          final breakdownMap =
+              breakdown as Map<String, dynamic>? ?? <String, dynamic>{};
+          _earningsBreakdown = breakdownMap.entries
+              .map(
+                (e) => {
+                  'service': e.key.replaceAll('_', ' '),
+                  'amount': e.value,
+                  'date': periodLabel,
+                },
+              )
+              .toList();
+        }
         _isLoading = false;
       });
     } catch (e) {
@@ -382,7 +391,7 @@ class _EarningsScreenState extends State<EarningsScreen> {
               Navigator.pop(ctx);
               try {
                 await _walletDS.requestWithdrawal(
-                  userId: _userId!,
+                  userId: 'local-worker-wallet',
                   amount: amount,
                   bankDetails: {}, // Uses bank details from worker profile
                 );

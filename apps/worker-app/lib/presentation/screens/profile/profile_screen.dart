@@ -544,54 +544,57 @@ class _ProfileScreenState extends State<ProfileScreen> {
   }
 
   Widget _buildMenuCard(BuildContext context, List<_MenuItemData> items) {
-    return Container(
-      decoration: BoxDecoration(
-        color: Theme.of(context).colorScheme.surface,
-        borderRadius: BorderRadius.circular(AppSpacing.radiusMD),
-        border: Border.all(color: AppColors.border),
-      ),
-      child: Column(
-        children: items.asMap().entries.map((entry) {
-          final index = entry.key;
-          final item = entry.value;
-          return Column(
-            children: [
-              ListTile(
-                leading: Icon(
-                  item.icon,
-                  color: item.isDestructive
-                      ? AppColors.error
-                      : Theme.of(
-                          context,
-                        ).colorScheme.onSurface.withValues(alpha: 0.7),
-                ),
-                title: Text(
-                  item.title,
-                  style: TextStyle(
+    return Material(
+      color: Theme.of(context).colorScheme.surface,
+      borderRadius: BorderRadius.circular(AppSpacing.radiusMD),
+      child: Container(
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(AppSpacing.radiusMD),
+          border: Border.all(color: AppColors.border),
+        ),
+        child: Column(
+          children: items.asMap().entries.map((entry) {
+            final index = entry.key;
+            final item = entry.value;
+            return Column(
+              children: [
+                ListTile(
+                  leading: Icon(
+                    item.icon,
                     color: item.isDestructive
                         ? AppColors.error
-                        : Theme.of(context).colorScheme.onSurface,
+                        : Theme.of(
+                            context,
+                          ).colorScheme.onSurface.withValues(alpha: 0.7),
                   ),
+                  title: Text(
+                    item.title,
+                    style: TextStyle(
+                      color: item.isDestructive
+                          ? AppColors.error
+                          : Theme.of(context).colorScheme.onSurface,
+                    ),
+                  ),
+                  trailing: item.isSwitch
+                      ? Switch(
+                          value: item.switchValue ?? false,
+                          onChanged: (_) => item.onTap(),
+                          activeThumbColor: AppColors.primary,
+                        )
+                      : Icon(
+                          Icons.chevron_right,
+                          color: Theme.of(
+                            context,
+                          ).colorScheme.onSurface.withValues(alpha: 0.5),
+                        ),
+                  onTap: item.isSwitch ? null : item.onTap,
                 ),
-                trailing: item.isSwitch
-                    ? Switch(
-                        value: item.switchValue ?? false,
-                        onChanged: (_) => item.onTap(),
-                        activeThumbColor: AppColors.primary,
-                      )
-                    : Icon(
-                        Icons.chevron_right,
-                        color: Theme.of(
-                          context,
-                        ).colorScheme.onSurface.withValues(alpha: 0.5),
-                      ),
-                onTap: item.isSwitch ? null : item.onTap,
-              ),
-              if (index < items.length - 1)
-                const Divider(height: 1, indent: 56),
-            ],
-          );
-        }).toList(),
+                if (index < items.length - 1)
+                  const Divider(height: 1, indent: 56),
+              ],
+            );
+          }).toList(),
+        ),
       ),
     );
   }

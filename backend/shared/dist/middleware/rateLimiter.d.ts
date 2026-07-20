@@ -10,7 +10,8 @@ export declare const generalLimiter: import("express-rate-limit").RateLimitReque
 export declare const authLimiter: import("express-rate-limit").RateLimitRequestHandler;
 /**
  * OTP Request Rate Limiter
- * 3 OTP requests per hour
+ * 3 OTP requests per hour in production; relaxed in development so local
+ * testing/iteration isn't blocked by the same 1-hour cooldown.
  */
 export declare const otpLimiter: import("express-rate-limit").RateLimitRequestHandler;
 /**

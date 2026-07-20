@@ -3,20 +3,12 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:connectivity_plus/connectivity_plus.dart';
 
-import 'core/appwrite/appwrite_client.dart';
 import 'core/network/network_info.dart';
 
 import 'data/datasources/remote/auth_remote_datasource.dart';
 import 'data/datasources/remote/booking_remote_datasource.dart';
 import 'data/datasources/remote/user_remote_datasource.dart';
 import 'data/datasources/remote/notification_remote_datasource.dart';
-
-// Appwrite data sources (replaces Dio REST calls)
-import 'data/datasources/appwrite/appwrite_auth_datasource.dart';
-import 'data/datasources/appwrite/appwrite_user_datasource.dart';
-import 'data/datasources/appwrite/appwrite_booking_datasource.dart';
-import 'data/datasources/appwrite/appwrite_notification_datasource.dart';
-import 'data/datasources/appwrite/appwrite_wallet_datasource.dart';
 
 import 'data/repositories/auth_repository_impl.dart';
 import 'data/repositories/booking_repository_impl.dart';
@@ -44,11 +36,6 @@ import 'data/datasources/remote/booking_remote_datasource_impl.dart';
 import 'data/datasources/remote/user_remote_datasource_impl.dart';
 import 'data/datasources/remote/notification_remote_datasource_impl.dart';
 
-// ... (existing imports preserved)
-
-/// Toggle this to switch between Appwrite (cloud) and REST (local backend)
-const bool useAppwrite = false;
-
 final sl = GetIt.instance;
 
 /// Initialize all dependencies
@@ -74,49 +61,18 @@ Future<void> initializeDependencies() async {
     () => DioClient(dio: sl<Dio>(), secureStorage: sl<FlutterSecureStorage>()),
   );
 
-  if (useAppwrite) {
-    // ============================================================
-    // APPWRITE BACKEND (Cloud)
-    // ============================================================
-    // Initialize Appwrite client
-    AppwriteClient.initialize();
-
-    // Data Sources — Appwrite SDK
-    sl.registerLazySingleton<AuthRemoteDataSource>(
-      () => AppwriteAuthDataSource(),
-    );
-    sl.registerLazySingleton<UserRemoteDataSource>(
-      () => AppwriteUserDataSource(),
-    );
-    sl.registerLazySingleton<BookingRemoteDataSource>(
-      () => AppwriteBookingDataSource(),
-    );
-    sl.registerLazySingleton<NotificationRemoteDataSource>(
-      () => AppwriteNotificationDataSource(),
-    );
-    
-    // Wallet / Payment Data Source
-    sl.registerLazySingleton<AppwriteWalletDataSource>(
-      () => AppwriteWalletDataSource(),
-    );
-  } else {
-    // ============================================================
-    // REST BACKEND (Node.js Gateway)
-    // ============================================================
-    // Data Sources — Dio REST
-    sl.registerLazySingleton<AuthRemoteDataSource>(
-      () => AuthRemoteDataSourceImpl(dio: sl<DioClient>().dio),
-    );
-    sl.registerLazySingleton<UserRemoteDataSource>(
-      () => UserRemoteDataSourceImpl(dio: sl<DioClient>().dio),
-    );
-    sl.registerLazySingleton<BookingRemoteDataSource>(
-      () => BookingRemoteDataSourceImpl(dio: sl<DioClient>().dio),
-    );
-    sl.registerLazySingleton<NotificationRemoteDataSource>(
-      () => NotificationRemoteDataSourceImpl(dio: sl<DioClient>().dio),
-    );
-  }
+  sl.registerLazySingleton<AuthRemoteDataSource>(
+    () => AuthRemoteDataSourceImpl(dio: sl<DioClient>().dio),
+  );
+  sl.registerLazySingleton<UserRemoteDataSource>(
+    () => UserRemoteDataSourceImpl(dio: sl<DioClient>().dio),
+  );
+  sl.registerLazySingleton<BookingRemoteDataSource>(
+    () => BookingRemoteDataSourceImpl(dio: sl<DioClient>().dio),
+  );
+  sl.registerLazySingleton<NotificationRemoteDataSource>(
+    () => NotificationRemoteDataSourceImpl(dio: sl<DioClient>().dio),
+  );
 
   // Repositories
   sl.registerLazySingleton<AuthRepository>(

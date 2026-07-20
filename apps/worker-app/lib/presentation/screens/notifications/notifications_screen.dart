@@ -1,11 +1,12 @@
 import 'dart:async';
 import 'dart:convert';
-import 'package:appwrite/appwrite.dart';
+import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
-import '../../../core/appwrite/appwrite_client.dart';
-import '../../../core/appwrite/appwrite_config.dart';
+import '../../../core/constants/api_endpoints.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/constants/app_spacing.dart';
+import '../../../core/network/dio_client.dart';
+import '../../../injection_container.dart';
 import '../../routes/app_routes.dart';
 
 class NotificationsScreen extends StatefulWidget {
@@ -16,65 +17,51 @@ class NotificationsScreen extends StatefulWidget {
 }
 
 class _NotificationsScreenState extends State<NotificationsScreen> {
+  final Dio _dio = sl<DioClient>().dio;
   bool _isLoading = true;
   final List<_NotificationItem> _notifications = [];
   String? _error;
-  StreamSubscription? _notificationsRealtimeSub;
+  Timer? _pollTimer;
 
   @override
   void initState() {
     super.initState();
     _loadNotifications();
-    _subscribeToNotifications();
+    // Poll for new notifications periodically
+    _pollTimer = Timer.periodic(const Duration(seconds: 30), (_) {
+      if (mounted && !_isLoading) _loadNotifications(silent: true);
+    });
   }
 
   @override
   void dispose() {
-    _notificationsRealtimeSub?.cancel();
+    _pollTimer?.cancel();
     super.dispose();
   }
 
-  /// Subscribe to realtime notifications so new ones appear instantly.
-  void _subscribeToNotifications() {
-    try {
-      final sub = AppwriteClient.realtime.subscribe([
-        'tablesdb.${AppwriteConfig.databaseId}.tables.${AppwriteConfig.notificationsCollection}.rows',
-      ]);
-      _notificationsRealtimeSub = sub.stream.listen((event) {
-        if (!mounted) return;
-        // Reload the full list — lightweight and ensures correct ordering
-        _loadNotifications();
+  Future<void> _loadNotifications({bool silent = false}) async {
+    if (!silent) {
+      setState(() {
+        _isLoading = true;
+        _error = null;
       });
-    } catch (_) {
-      // Realtime is nice-to-have
     }
-  }
-
-  Future<void> _loadNotifications() async {
-    setState(() {
-      _isLoading = true;
-      _error = null;
-    });
 
     try {
-      final tablesDB = AppwriteClient.tablesDB;
-      final user = await AppwriteClient.account.get();
-      final result = await tablesDB.listRows(
-        databaseId: AppwriteConfig.databaseId,
-        tableId: AppwriteConfig.notificationsCollection,
-        queries: [
-          Query.equal('recipientId', user.$id),
-          Query.orderDesc('\$createdAt'),
-          Query.limit(50),
-        ],
+      final response = await _dio.get(
+        ApiEndpoints.notifications,
+        queryParameters: {'page': 1, 'limit': 50},
       );
+      final payload = response.data['data'] ?? response.data;
+      final rows = payload is List
+          ? payload
+          : (payload['notifications'] ?? []) as List;
 
       _notifications.clear();
-      for (final row in result.rows) {
+      for (final row in rows) {
         try {
-          // The 'data' field is stored as a JSON string by the notification-sender
           String? bookingId;
-          final rawData = row.data['data'];
+          final rawData = row['data'];
           if (rawData is String && rawData.isNotEmpty) {
             try {
               final parsed = jsonDecode(rawData);
@@ -88,12 +75,14 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
 
           _notifications.add(
             _NotificationItem(
-              id: row.$id,
-              type: (row.data['type'] ?? 'SYSTEM').toString(),
-              title: (row.data['title'] ?? '').toString(),
-              body: (row.data['body'] ?? '').toString(),
-              isRead: row.data['isRead'] == true,
-              createdAt: DateTime.tryParse(row.$createdAt) ?? DateTime.now(),
+              id: (row['_id'] ?? '').toString(),
+              type: (row['type'] ?? 'SYSTEM').toString(),
+              title: (row['title'] ?? '').toString(),
+              body: (row['body'] ?? '').toString(),
+              isRead: row['isRead'] == true,
+              createdAt:
+                  DateTime.tryParse((row['createdAt'] ?? '').toString()) ??
+                  DateTime.now(),
               bookingId: bookingId,
             ),
           );
@@ -101,21 +90,17 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
           // Skip malformed notification entries
         }
       }
+      if (silent && mounted) setState(() {});
     } catch (e) {
       _error = e.toString().replaceAll('Exception: ', '');
     } finally {
-      if (mounted) setState(() => _isLoading = false);
+      if (mounted && !silent) setState(() => _isLoading = false);
     }
   }
 
   Future<void> _markAsRead(String notificationId) async {
     try {
-      await AppwriteClient.tablesDB.updateRow(
-        databaseId: AppwriteConfig.databaseId,
-        tableId: AppwriteConfig.notificationsCollection,
-        rowId: notificationId,
-        data: {'isRead': true, 'readAt': DateTime.now().toIso8601String()},
-      );
+      await _dio.put(ApiEndpoints.markAsRead(notificationId));
 
       final idx = _notifications.indexWhere((n) => n.id == notificationId);
       if (idx != -1 && mounted) {
@@ -130,18 +115,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
 
   Future<void> _markAllAsRead() async {
     try {
-      final unread = _notifications.where((n) => !n.isRead).toList();
-      final readAt = DateTime.now().toIso8601String();
-      await Future.wait(
-        unread.map(
-          (n) => AppwriteClient.tablesDB.updateRow(
-            databaseId: AppwriteConfig.databaseId,
-            tableId: AppwriteConfig.notificationsCollection,
-            rowId: n.id,
-            data: {'isRead': true, 'readAt': readAt},
-          ),
-        ),
-      );
+      await _dio.put(ApiEndpoints.markAllAsRead);
 
       if (mounted) {
         setState(() {
@@ -164,11 +138,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
 
   Future<void> _deleteNotification(String notificationId) async {
     try {
-      await AppwriteClient.tablesDB.deleteRow(
-        databaseId: AppwriteConfig.databaseId,
-        tableId: AppwriteConfig.notificationsCollection,
-        rowId: notificationId,
-      );
+      await _dio.delete('${ApiEndpoints.notifications}/$notificationId');
 
       if (mounted) {
         setState(() {

@@ -1,8 +1,6 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
-import '../../../core/appwrite/appwrite_client.dart';
-import '../../../core/appwrite/appwrite_config.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/constants/app_spacing.dart';
 import '../../../core/routes/app_routes.dart';
@@ -27,40 +25,33 @@ class _BookingsListScreenState extends State<BookingsListScreen>
   List<BookingModel> _pastBookings = [];
   bool _isLoading = true;
   String? _errorMessage;
-  StreamSubscription? _bookingsRealtimeSub;
+  Timer? _pollTimer;
 
   @override
   void initState() {
     super.initState();
     _tabController = TabController(length: 2, vsync: this);
     _loadBookings();
-    _subscribeToBookingUpdates();
+    // Poll so a status change made by the worker (accept/reject/start/
+    // complete) shows up while this list is open, not just on manual
+    // refresh or when a booking happens to be cancelled from here.
+    _pollTimer = Timer.periodic(const Duration(seconds: 15), (_) {
+      if (mounted) _loadBookings(silent: true);
+    });
   }
 
-  void _loadBookings() {
-    // Load all bookings initially
+  void _loadBookings({bool silent = false}) {
+    // Set our own loading flag directly rather than reacting to the shared
+    // bloc's generic BookingLoading state (see listener below for why). A
+    // silent (polling) refresh skips the full-screen spinner so it doesn't
+    // interrupt the user browsing the list.
+    if (!silent) setState(() => _isLoading = true);
     context.read<BookingBloc>().add(const LoadBookingsRequested(limit: 50));
-  }
-
-  /// Subscribe to realtime booking changes so the list stays up-to-date
-  /// when a booking status changes (e.g. worker accepts, job completes).
-  void _subscribeToBookingUpdates() {
-    try {
-      final sub = AppwriteClient.realtime.subscribe([
-        'tablesdb.${AppwriteConfig.databaseId}.tables.${AppwriteConfig.bookingsCollection}.rows',
-      ]);
-      _bookingsRealtimeSub = sub.stream.listen((event) {
-        if (!mounted) return;
-        _loadBookings();
-      });
-    } catch (_) {
-      // Realtime is nice-to-have
-    }
   }
 
   @override
   void dispose() {
-    _bookingsRealtimeSub?.cancel();
+    _pollTimer?.cancel();
     _tabController.dispose();
     super.dispose();
   }
@@ -130,11 +121,19 @@ class _BookingsListScreenState extends State<BookingsListScreen>
             _isLoading = false;
             _errorMessage = state.message;
           });
-        } else if (state is BookingLoading) {
-          setState(() {
-            _isLoading = true;
-          });
+        } else if (state is BookingCancelled) {
+          // A booking may have been cancelled from the tracking screen
+          // (this screen stays mounted underneath that push). Refresh so
+          // the list reflects the cancellation instead of going stale.
+          _loadBookings();
         }
+        // Deliberately not reacting to the generic BookingLoading state:
+        // it's emitted by unrelated actions on this shared bloc (cancel,
+        // rating submission, detail loads, ...) and would otherwise flip
+        // this screen into a loading state that only BookingsLoaded/
+        // BookingError (both handled above) can clear — if neither ever
+        // arrives (e.g. the action was a cancel, not a list reload), the
+        // spinner would be stuck forever.
       },
       child: Scaffold(
         backgroundColor: Theme.of(context).scaffoldBackgroundColor,
@@ -203,45 +202,67 @@ class _BookingsListScreenState extends State<BookingsListScreen>
     );
   }
 
+  Future<void> _onPullToRefresh() async {
+    _loadBookings();
+    // Wait for this refresh's own result so the indicator stays visible
+    // until the list has actually updated, rather than vanishing early.
+    await context.read<BookingBloc>().stream.firstWhere(
+      (state) => state is BookingsLoaded || state is BookingError,
+    );
+  }
+
   Widget _buildBookingsList(
     List<BookingModel> bookings, {
     required bool isActive,
   }) {
     if (bookings.isEmpty) {
-      return Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
+      return RefreshIndicator(
+        onRefresh: _onPullToRefresh,
+        child: ListView(
+          // Empty-state content isn't tall enough to scroll on its own;
+          // force scrollability so the pull-to-refresh gesture still works.
+          physics: const AlwaysScrollableScrollPhysics(),
           children: [
-            Icon(
-              isActive ? Icons.event_busy : Icons.history,
-              size: 64,
-              color: Theme.of(
-                context,
-              ).colorScheme.onSurface.withValues(alpha: 0.5),
-            ),
-            const SizedBox(height: AppSpacing.md),
-            Text(
-              isActive ? 'No active bookings' : 'No past bookings',
-              style: TextStyle(
-                fontSize: 16,
-                fontWeight: FontWeight.w500,
-                color: Theme.of(
-                  context,
-                ).colorScheme.onSurface.withValues(alpha: 0.7),
+            SizedBox(
+              height: MediaQuery.of(context).size.height * 0.6,
+              child: Center(
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(
+                      isActive ? Icons.event_busy : Icons.history,
+                      size: 64,
+                      color: Theme.of(
+                        context,
+                      ).colorScheme.onSurface.withValues(alpha: 0.5),
+                    ),
+                    const SizedBox(height: AppSpacing.md),
+                    Text(
+                      isActive ? 'No active bookings' : 'No past bookings',
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w500,
+                        color: Theme.of(
+                          context,
+                        ).colorScheme.onSurface.withValues(alpha: 0.7),
+                      ),
+                    ),
+                    const SizedBox(height: AppSpacing.sm),
+                    Text(
+                      isActive
+                          ? 'Book a service to get started'
+                          : 'Your completed bookings will appear here',
+                      style: TextStyle(
+                        fontSize: 14,
+                        color: Theme.of(
+                          context,
+                        ).colorScheme.onSurface.withValues(alpha: 0.6),
+                      ),
+                      textAlign: TextAlign.center,
+                    ),
+                  ],
+                ),
               ),
-            ),
-            const SizedBox(height: AppSpacing.sm),
-            Text(
-              isActive
-                  ? 'Book a service to get started'
-                  : 'Your completed bookings will appear here',
-              style: TextStyle(
-                fontSize: 14,
-                color: Theme.of(
-                  context,
-                ).colorScheme.onSurface.withValues(alpha: 0.6),
-              ),
-              textAlign: TextAlign.center,
             ),
           ],
         ),
@@ -249,9 +270,7 @@ class _BookingsListScreenState extends State<BookingsListScreen>
     }
 
     return RefreshIndicator(
-      onRefresh: () async {
-        _loadBookings();
-      },
+      onRefresh: _onPullToRefresh,
       child: ListView.builder(
         padding: const EdgeInsets.all(AppSpacing.md),
         itemCount: bookings.length,

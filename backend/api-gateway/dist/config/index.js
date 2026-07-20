@@ -7,13 +7,16 @@ const __dirname = dirname(__filename);
 dotenv.config({ path: resolve(__dirname, '../../../../.env') });
 export const config = {
     port: parseInt(process.env.PORT || '3000', 10),
-    nodeEnv: process.env.NODE_ENV || 'development',
+    nodeEnv: process.env.NODE_ENV || 'production',
+    localDevMode: process.env.LOCAL_DEV_MODE === 'true',
     jwt: {
         secret: process.env.JWT_SECRET || 'your-super-secret-jwt-key-change-in-production',
     },
     corsOrigins: process.env.CORS_ORIGINS?.split(',') || [
         'http://localhost:3000',
+        'http://localhost:5173',
         'http://localhost:8080',
+        'https://handy-go-1y91.onrender.com',
     ],
     // Redis configuration for rate limiting and caching
     redis: {

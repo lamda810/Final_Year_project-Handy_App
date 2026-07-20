@@ -1,12 +1,10 @@
-import 'package:appwrite/appwrite.dart';
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/constants/app_spacing.dart';
 import '../../../core/routes/app_routes.dart';
-import '../../../data/datasources/appwrite/appwrite_booking_datasource.dart';
 import '../../../data/models/booking_model.dart';
 import '../../blocs/booking/booking_bloc.dart';
 import '../../blocs/booking/booking_event.dart';
@@ -25,13 +23,7 @@ class _BookingTrackingScreenState extends State<BookingTrackingScreen> {
   BookingModel? _booking;
   final _cancelReasonController = TextEditingController();
 
-  // Realtime subscriptions (replace polling)
-  final AppwriteBookingDataSource _datasource = AppwriteBookingDataSource();
-  RealtimeSubscription? _bookingSub;
-  RealtimeSubscription? _locationSub;
-  double? _workerLat;
-  double? _workerLng;
-  GoogleMapController? _mapController;
+  Timer? _refreshTimer;
 
   static const List<_TrackingStatus> _statusFlow = [
     _TrackingStatus.pending,
@@ -53,15 +45,13 @@ class _BookingTrackingScreenState extends State<BookingTrackingScreen> {
     if (id != null && id.isNotEmpty && id != _bookingId) {
       _bookingId = id;
       _fetchBookingDetails();
-      _subscribeToRealtime();
+      _startPolling();
     }
   }
 
   @override
   void dispose() {
-    _mapController?.dispose();
-    _bookingSub?.close();
-    _locationSub?.close();
+    _refreshTimer?.cancel();
     _cancelReasonController.dispose();
     super.dispose();
   }
@@ -74,29 +64,22 @@ class _BookingTrackingScreenState extends State<BookingTrackingScreen> {
     }
   }
 
-  /// Subscribe to Appwrite Realtime for booking status changes and worker location
-  void _subscribeToRealtime() {
-    // Subscribe to booking document changes (status updates, worker assignment, etc.)
-    _bookingSub?.close();
-    _bookingSub = _datasource.subscribeToBooking(_bookingId, (data) {
-      if (mounted) {
-        // Re-fetch the full booking details when any change occurs
-        _fetchBookingDetails();
-      }
-    });
+  Future<void> _onPullToRefresh() async {
+    _fetchBookingDetails();
+    // Wait for this refresh's own result so the indicator stays visible
+    // until the booking's current status has actually been re-fetched.
+    await context.read<BookingBloc>().stream.firstWhere(
+      (state) => state is BookingDetailsLoaded || state is BookingError,
+    );
+  }
 
-    // Subscribe to worker location updates for this booking
-    _locationSub?.close();
-    _locationSub = _datasource.subscribeToWorkerLocation(_bookingId, (
-      lat,
-      lng,
-    ) {
-      if (mounted) {
-        setState(() {
-          _workerLat = lat;
-          _workerLng = lng;
-        });
-      }
+  void _startPolling() {
+    _refreshTimer?.cancel();
+    if (_bookingId.isEmpty) return;
+
+    _refreshTimer = Timer.periodic(const Duration(seconds: 10), (_) {
+      if (!mounted || _bookingId.isEmpty) return;
+      _fetchBookingDetails();
     });
   }
 
@@ -120,7 +103,7 @@ class _BookingTrackingScreenState extends State<BookingTrackingScreen> {
   }
 
   void _callWorker() async {
-    final phone = _booking?.worker?.phone;
+    final phone = _booking?.worker?.callablePhone;
     if (phone != null && phone.isNotEmpty) {
       final uri = Uri.parse('tel:$phone');
       if (await canLaunchUrl(uri)) {
@@ -156,6 +139,7 @@ class _BookingTrackingScreenState extends State<BookingTrackingScreen> {
       arguments: {
         'bookingId': _bookingId,
         'workerName': _booking?.worker?.fullName ?? 'Worker',
+        'workerPhone': _booking?.worker?.callablePhone,
       },
     );
   }
@@ -248,6 +232,21 @@ class _BookingTrackingScreenState extends State<BookingTrackingScreen> {
       },
       builder: (context, state) {
         final currentStatus = _mapStatus(_booking?.status);
+        // A worker was assigned then rejected the job while the booking is
+        // still otherwise PENDING. The backend never changes booking.status
+        // for this — it just clears `worker` and pushes a WORKER_REJECTED
+        // timeline entry — so we detect it client-side to avoid showing a
+        // plain, unqualified "Pending". We key off the actual timeline
+        // entry (not just worker == null) because a brand-new booking that
+        // simply hasn't had a worker selected yet also has worker == null.
+        final workerRejected =
+            currentStatus == _TrackingStatus.pending &&
+            _booking != null &&
+            _booking!.workerId == null &&
+            _booking!.worker == null &&
+            _booking!.timeline.any(
+              (t) => t.status.toUpperCase() == 'WORKER_REJECTED',
+            );
 
         if (_booking == null && state is BookingLoading) {
           return Scaffold(
@@ -273,23 +272,18 @@ class _BookingTrackingScreenState extends State<BookingTrackingScreen> {
           ),
           body: Stack(
             children: [
-              SingleChildScrollView(
+              RefreshIndicator(
+                onRefresh: _onPullToRefresh,
+                child: SingleChildScrollView(
+                physics: const AlwaysScrollableScrollPhysics(),
                 padding: const EdgeInsets.all(AppSpacing.md),
                 child: Column(
                   children: [
-                    _buildBookingInfoCard(currentStatus),
+                    _buildBookingInfoCard(currentStatus, workerRejected),
                     const SizedBox(height: AppSpacing.lg),
                     // Show a banner when PENDING with no worker (worker rejected or timed out)
-                    if (currentStatus == _TrackingStatus.pending &&
-                        _booking != null &&
-                        _booking!.workerId == null &&
-                        _booking!.worker == null)
-                      _buildWorkerDeclinedBanner(),
-                    _buildStatusTimeline(currentStatus),
-                    const SizedBox(height: AppSpacing.lg),
-                    if (currentStatus == _TrackingStatus.accepted ||
-                        currentStatus == _TrackingStatus.inProgress)
-                      _buildMapCard(),
+                    if (workerRejected) _buildWorkerDeclinedBanner(),
+                    _buildStatusTimeline(currentStatus, workerRejected),
                     const SizedBox(height: AppSpacing.lg),
                     if (currentStatus.index >= _TrackingStatus.accepted.index)
                       _buildWorkerCard(),
@@ -299,6 +293,7 @@ class _BookingTrackingScreenState extends State<BookingTrackingScreen> {
                     ],
                     const SizedBox(height: 100),
                   ],
+                ),
                 ),
               ),
               if (currentStatus.index >= _TrackingStatus.accepted.index &&
@@ -320,7 +315,10 @@ class _BookingTrackingScreenState extends State<BookingTrackingScreen> {
     );
   }
 
-  Widget _buildBookingInfoCard(_TrackingStatus currentStatus) {
+  Widget _buildBookingInfoCard(
+    _TrackingStatus currentStatus,
+    bool workerRejected,
+  ) {
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
     final bookingNumber = _booking?.bookingNumber ?? _bookingId;
@@ -356,7 +354,7 @@ class _BookingTrackingScreenState extends State<BookingTrackingScreen> {
                 ),
               ),
               const SizedBox(width: AppSpacing.sm),
-              _buildStatusBadge(currentStatus),
+              _buildStatusBadge(currentStatus, workerRejected),
             ],
           ),
           const Divider(height: AppSpacing.lg),
@@ -423,35 +421,47 @@ class _BookingTrackingScreenState extends State<BookingTrackingScreen> {
   }
 
   Widget _buildWorkerDeclinedBanner() {
+    // Surface the actual reason from the WORKER_REJECTED timeline entry
+    // (e.g. "Rejected by worker. Reason: too far away") instead of a
+    // generic message, when the backend provided one.
+    String? note;
+    for (final entry in _booking?.timeline ?? const <BookingTimeline>[]) {
+      if (entry.status.toUpperCase() == 'WORKER_REJECTED') {
+        note = entry.note;
+      }
+    }
+
     return Container(
       width: double.infinity,
       margin: const EdgeInsets.only(bottom: AppSpacing.lg),
       padding: const EdgeInsets.all(AppSpacing.md),
       decoration: BoxDecoration(
-        color: AppColors.warning.withValues(alpha: 0.1),
+        color: AppColors.error.withValues(alpha: 0.1),
         borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
-        border: Border.all(color: AppColors.warning.withValues(alpha: 0.3)),
+        border: Border.all(color: AppColors.error.withValues(alpha: 0.3)),
       ),
       child: Row(
         children: [
-          Icon(Icons.info_outline, color: AppColors.warning, size: 28),
+          Icon(Icons.cancel_outlined, color: AppColors.error, size: 28),
           const SizedBox(width: AppSpacing.sm),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  'Worker Unavailable',
+                  'Worker Rejected This Job',
                   style: TextStyle(
                     fontWeight: FontWeight.w600,
-                    color: AppColors.warning,
+                    color: AppColors.error,
                     fontSize: 14,
                   ),
                 ),
                 const SizedBox(height: 4),
                 Text(
-                  'The assigned worker is no longer available. '
-                  'You can cancel and rebook, or wait for a new worker to be assigned.',
+                  note?.isNotEmpty == true
+                      ? note!
+                      : 'The assigned worker declined this job. '
+                            'You can cancel and rebook, or wait for a new worker to be assigned.',
                   style: TextStyle(
                     color: AppColors.textSecondary,
                     fontSize: 13,
@@ -465,31 +475,36 @@ class _BookingTrackingScreenState extends State<BookingTrackingScreen> {
     );
   }
 
-  Widget _buildStatusBadge(_TrackingStatus status) {
+  Widget _buildStatusBadge(_TrackingStatus status, bool workerRejected) {
     Color color;
     String text;
 
-    switch (status) {
-      case _TrackingStatus.pending:
-        color = AppColors.warning;
-        text = 'Pending';
-        break;
-      case _TrackingStatus.accepted:
-        color = AppColors.primary;
-        text = 'Accepted';
-        break;
-      case _TrackingStatus.inProgress:
-        color = AppColors.secondary;
-        text = 'In Progress';
-        break;
-      case _TrackingStatus.completed:
-        color = AppColors.success;
-        text = 'Completed';
-        break;
-      case _TrackingStatus.cancelled:
-        color = AppColors.error;
-        text = 'Cancelled';
-        break;
+    if (workerRejected) {
+      color = AppColors.error;
+      text = 'Rejected';
+    } else {
+      switch (status) {
+        case _TrackingStatus.pending:
+          color = AppColors.warning;
+          text = 'Pending';
+          break;
+        case _TrackingStatus.accepted:
+          color = AppColors.primary;
+          text = 'Accepted';
+          break;
+        case _TrackingStatus.inProgress:
+          color = AppColors.secondary;
+          text = 'In Progress';
+          break;
+        case _TrackingStatus.completed:
+          color = AppColors.success;
+          text = 'Completed';
+          break;
+        case _TrackingStatus.cancelled:
+          color = AppColors.error;
+          text = 'Cancelled';
+          break;
+      }
     }
 
     return Container(
@@ -512,7 +527,10 @@ class _BookingTrackingScreenState extends State<BookingTrackingScreen> {
     );
   }
 
-  Widget _buildStatusTimeline(_TrackingStatus currentStatus) {
+  Widget _buildStatusTimeline(
+    _TrackingStatus currentStatus,
+    bool workerRejected,
+  ) {
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
     return Container(
@@ -539,22 +557,33 @@ class _BookingTrackingScreenState extends State<BookingTrackingScreen> {
             ),
           ),
           const SizedBox(height: AppSpacing.md),
-          ..._buildTimelineItems(currentStatus),
+          ..._buildTimelineItems(currentStatus, workerRejected),
         ],
       ),
     );
   }
 
-  List<Widget> _buildTimelineItems(_TrackingStatus currentStatus) {
+  List<Widget> _buildTimelineItems(
+    _TrackingStatus currentStatus,
+    bool workerRejected,
+  ) {
     final colorScheme = Theme.of(context).colorScheme;
     final items = <Widget>[];
     final displayStatuses = _statusFlow.toList();
 
     for (var i = 0; i < displayStatuses.length; i++) {
       final status = displayStatuses[i];
-      final isCompleted = status.index <= currentStatus.index;
-      final isCurrent = status == currentStatus;
+      // The worker-rejected outcome replaces the "Worker Accepted" step:
+      // the booking's top-level status never changes on rejection (it
+      // stays PENDING while the backend tries to auto-match a replacement),
+      // so this is detected separately rather than via currentStatus.
+      final isRejectedStep = workerRejected && status == _TrackingStatus.accepted;
+      final isCompleted = status.index <= currentStatus.index || isRejectedStep;
+      final isCurrent = status == currentStatus || isRejectedStep;
       final isLast = i == displayStatuses.length - 1;
+      final stepColor = isRejectedStep
+          ? AppColors.error
+          : (isCompleted ? AppColors.primary : AppColors.border);
 
       items.add(
         Row(
@@ -566,10 +595,16 @@ class _BookingTrackingScreenState extends State<BookingTrackingScreen> {
                   width: 24,
                   height: 24,
                   decoration: BoxDecoration(
-                    color: isCompleted ? AppColors.primary : AppColors.border,
+                    color: stepColor,
                     shape: BoxShape.circle,
                   ),
-                  child: isCompleted
+                  child: isRejectedStep
+                      ? const Icon(
+                          Icons.close,
+                          size: 14,
+                          color: AppColors.textOnPrimary,
+                        )
+                      : isCompleted
                       ? const Icon(
                           Icons.check,
                           size: 14,
@@ -593,12 +628,14 @@ class _BookingTrackingScreenState extends State<BookingTrackingScreen> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      _getStatusTitle(status),
+                      isRejectedStep ? 'Worker Rejected' : _getStatusTitle(status),
                       style: TextStyle(
                         fontWeight: isCurrent
                             ? FontWeight.w600
                             : FontWeight.normal,
-                        color: isCompleted
+                        color: isRejectedStep
+                            ? AppColors.error
+                            : isCompleted
                             ? colorScheme.onSurface
                             : colorScheme.onSurface.withValues(alpha: 0.7),
                       ),
@@ -607,7 +644,9 @@ class _BookingTrackingScreenState extends State<BookingTrackingScreen> {
                       Padding(
                         padding: const EdgeInsets.only(top: 4),
                         child: Text(
-                          _getStatusTime(status),
+                          isRejectedStep
+                              ? _getTimelineEntryTime('WORKER_REJECTED')
+                              : _getStatusTime(status),
                           style: TextStyle(
                             fontSize: 12,
                             color: colorScheme.onSurface.withValues(alpha: 0.7),
@@ -642,11 +681,14 @@ class _BookingTrackingScreenState extends State<BookingTrackingScreen> {
   }
 
   String _getStatusTime(_TrackingStatus status) {
+    return _getTimelineEntryTime(_trackingStatusToBookingKey(status));
+  }
+
+  String _getTimelineEntryTime(String timelineKey) {
     // Try to get real timestamps from booking timeline
     if (_booking != null && _booking!.timeline.isNotEmpty) {
-      final matchingKey = _trackingStatusToBookingKey(status);
       for (final entry in _booking!.timeline) {
-        if (entry.status.toUpperCase() == matchingKey) {
+        if (entry.status.toUpperCase() == timelineKey) {
           final t = entry.timestamp;
           return '${t.hour}:${t.minute.toString().padLeft(2, '0')}';
         }
@@ -668,195 +710,6 @@ class _BookingTrackingScreenState extends State<BookingTrackingScreen> {
       case _TrackingStatus.cancelled:
         return 'CANCELLED';
     }
-  }
-
-  Widget _buildMapCard() {
-    final theme = Theme.of(context);
-    final colorScheme = theme.colorScheme;
-    final hasWorkerLocation = _workerLat != null && _workerLng != null;
-    final bookingCoords = _booking?.address.coordinates;
-
-    // Default center: worker location > booking address > Lahore
-    final centerLat = _workerLat ?? bookingCoords?.lat ?? 31.5204;
-    final centerLng = _workerLng ?? bookingCoords?.lng ?? 74.3587;
-
-    // Build markers
-    final markers = <Marker>{};
-    if (hasWorkerLocation) {
-      markers.add(
-        Marker(
-          markerId: const MarkerId('worker'),
-          position: LatLng(_workerLat!, _workerLng!),
-          icon: BitmapDescriptor.defaultMarkerWithHue(
-            BitmapDescriptor.hueAzure,
-          ),
-          infoWindow: InfoWindow(
-            title: _booking?.worker?.firstName ?? 'Worker',
-            snippet: 'Worker location',
-          ),
-        ),
-      );
-    }
-    if (bookingCoords != null) {
-      markers.add(
-        Marker(
-          markerId: const MarkerId('destination'),
-          position: LatLng(bookingCoords.lat, bookingCoords.lng),
-          icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueRed),
-          infoWindow: const InfoWindow(title: 'Service Location'),
-        ),
-      );
-    }
-
-    // Animate camera to worker location when available
-    if (hasWorkerLocation && _mapController != null) {
-      _mapController!.animateCamera(
-        CameraUpdate.newLatLng(LatLng(_workerLat!, _workerLng!)),
-      );
-    }
-
-    return Container(
-      height: 250,
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
-        boxShadow: [
-          BoxShadow(
-            color: theme.shadowColor.withValues(alpha: 0.1),
-            blurRadius: 10,
-          ),
-        ],
-      ),
-      clipBehavior: Clip.antiAlias,
-      child: Stack(
-        children: [
-          GoogleMap(
-            initialCameraPosition: CameraPosition(
-              target: LatLng(centerLat, centerLng),
-              zoom: 14,
-            ),
-            markers: markers,
-            myLocationEnabled: false,
-            myLocationButtonEnabled: false,
-            zoomControlsEnabled: false,
-            mapToolbarEnabled: false,
-            onMapCreated: (controller) {
-              _mapController = controller;
-              // If both markers exist, fit bounds to show both
-              if (hasWorkerLocation && bookingCoords != null) {
-                _fitBounds(controller);
-              }
-            },
-          ),
-          // ETA overlay
-          Positioned(
-            top: AppSpacing.md,
-            left: AppSpacing.md,
-            child: Container(
-              padding: const EdgeInsets.symmetric(
-                horizontal: AppSpacing.md,
-                vertical: AppSpacing.sm,
-              ),
-              decoration: BoxDecoration(
-                color: colorScheme.surface,
-                borderRadius: BorderRadius.circular(AppSpacing.radiusSm),
-                boxShadow: [BoxShadow(color: AppColors.shadow, blurRadius: 5)],
-              ),
-              child: Row(
-                children: [
-                  const Icon(
-                    Icons.access_time,
-                    size: 16,
-                    color: AppColors.primary,
-                  ),
-                  const SizedBox(width: AppSpacing.sm),
-                  Text(
-                    'ETA: ${_booking?.estimatedDuration ?? '--'} min',
-                    style: TextStyle(
-                      fontWeight: FontWeight.w600,
-                      color: colorScheme.onSurface,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-          // Realtime indicator
-          if (hasWorkerLocation)
-            Positioned(
-              top: AppSpacing.md,
-              right: AppSpacing.md,
-              child: Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: AppSpacing.sm,
-                  vertical: 4,
-                ),
-                decoration: BoxDecoration(
-                  color: AppColors.success,
-                  borderRadius: BorderRadius.circular(AppSpacing.radiusXs),
-                ),
-                child: const Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(Icons.circle, size: 8, color: AppColors.textOnPrimary),
-                    SizedBox(width: 4),
-                    Text(
-                      'LIVE',
-                      style: TextStyle(
-                        fontSize: 10,
-                        fontWeight: FontWeight.bold,
-                        color: AppColors.textOnPrimary,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          // Re-center button
-          if (hasWorkerLocation)
-            Positioned(
-              bottom: AppSpacing.md,
-              right: AppSpacing.md,
-              child: FloatingActionButton.small(
-                heroTag: 'recenter',
-                onPressed: () {
-                  if (bookingCoords != null) {
-                    _fitBounds(_mapController!);
-                  } else {
-                    _mapController?.animateCamera(
-                      CameraUpdate.newLatLng(LatLng(_workerLat!, _workerLng!)),
-                    );
-                  }
-                },
-                backgroundColor: colorScheme.surface,
-                child: Icon(
-                  Icons.center_focus_strong,
-                  color: colorScheme.onSurface,
-                ),
-              ),
-            ),
-        ],
-      ),
-    );
-  }
-
-  /// Fit the map to show both worker and destination markers
-  void _fitBounds(GoogleMapController controller) {
-    final workerLat = _workerLat;
-    final workerLng = _workerLng;
-    final bookingCoords = _booking?.address.coordinates;
-    if (workerLat == null || workerLng == null || bookingCoords == null) return;
-
-    final bounds = LatLngBounds(
-      southwest: LatLng(
-        workerLat < bookingCoords.lat ? workerLat : bookingCoords.lat,
-        workerLng < bookingCoords.lng ? workerLng : bookingCoords.lng,
-      ),
-      northeast: LatLng(
-        workerLat > bookingCoords.lat ? workerLat : bookingCoords.lat,
-        workerLng > bookingCoords.lng ? workerLng : bookingCoords.lng,
-      ),
-    );
-    controller.animateCamera(CameraUpdate.newLatLngBounds(bounds, 60));
   }
 
   Widget _buildWorkerCard() {
@@ -990,6 +843,7 @@ class _BookingTrackingScreenState extends State<BookingTrackingScreen> {
   Widget _buildCompletedActions() {
     final colorScheme = Theme.of(context).colorScheme;
     return Container(
+      width: double.infinity,
       padding: const EdgeInsets.all(AppSpacing.md),
       decoration: BoxDecoration(
         color: AppColors.success.withValues(alpha: 0.1),

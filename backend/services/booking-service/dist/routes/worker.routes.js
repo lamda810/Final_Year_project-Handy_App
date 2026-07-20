@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { authenticate, authorize } from '../middleware/auth.middleware.js';
+import { authenticate, authorize } from '@handy-go/shared';
 import * as workerController from '../controllers/worker.controller.js';
 import { validate } from '@handy-go/shared';
 import { acceptBookingSchema, rejectBookingSchema, startJobSchema, completeJobSchema, updateLocationSchema, } from '../validators/booking.validators.js';

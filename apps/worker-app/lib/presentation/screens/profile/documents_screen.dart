@@ -1,5 +1,5 @@
-import 'dart:async';
 import 'dart:typed_data';
+import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:image_picker/image_picker.dart';
@@ -8,10 +8,10 @@ import '../../blocs/auth/auth_event.dart';
 import '../../blocs/auth/auth_state.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/constants/app_spacing.dart';
-import '../../../core/appwrite/appwrite_config.dart';
-import '../../../core/appwrite/appwrite_client.dart';
+import '../../../core/network/dio_client.dart';
 import '../../../data/models/worker_model.dart';
-import '../../../data/repositories/appwrite_worker_repository.dart';
+import '../../../domain/repositories/worker_repository.dart';
+import '../../../injection_container.dart';
 
 class DocumentsScreen extends StatefulWidget {
   const DocumentsScreen({super.key});
@@ -21,30 +21,23 @@ class DocumentsScreen extends StatefulWidget {
 }
 
 class _DocumentsScreenState extends State<DocumentsScreen> {
-  final AppwriteWorkerRepository _repository = AppwriteWorkerRepository();
+  final WorkerRepository _repository = sl<WorkerRepository>();
   bool _isLoading = true;
   String? _errorMessage;
   WorkerModel? _worker;
-  StreamSubscription? _realtimeSubscription;
 
   final List<_Document> _documents = [];
   final Map<String, Future<Uint8List>> _imageCache = {};
   bool _forceServerRefresh = false;
 
-  /// Parse bucket ID and file ID from an Appwrite storage URL.
-  static final _storageUrlRegex = RegExp(
-    r'/storage/buckets/([^/]+)/files/([^/]+)/',
-  );
-
-  /// Load image bytes via the Appwrite SDK (handles auth automatically).
+  /// Load image bytes over HTTP (document URLs are plain hosted URLs).
   Future<Uint8List> _loadImageBytes(String url) {
     return _imageCache.putIfAbsent(url, () async {
-      final match = _storageUrlRegex.firstMatch(url);
-      if (match == null) throw Exception('Invalid storage URL');
-      return AppwriteClient.storage.getFileView(
-        bucketId: match.group(1)!,
-        fileId: match.group(2)!,
+      final response = await sl<DioClient>().dio.get<List<int>>(
+        url,
+        options: Options(responseType: ResponseType.bytes),
       );
+      return Uint8List.fromList(response.data ?? []);
     });
   }
 
@@ -52,44 +45,6 @@ class _DocumentsScreenState extends State<DocumentsScreen> {
   void initState() {
     super.initState();
     _loadDocuments();
-    _subscribeToVerificationChanges();
-  }
-
-  @override
-  void dispose() {
-    _realtimeSubscription?.cancel();
-    super.dispose();
-  }
-
-  /// Subscribe to realtime changes on the worker's document so that when an
-  /// admin verifies/rejects a document, the UI updates automatically.
-  void _subscribeToVerificationChanges() {
-    try {
-      final authState = context.read<AuthBloc>().state;
-      String? workerId;
-      if (authState is Authenticated) {
-        workerId = authState.worker.id;
-      }
-      if (workerId == null) return;
-
-      final channel =
-          'tablesdb.${AppwriteConfig.databaseId}.tables.${AppwriteConfig.workersCollection}.rows.$workerId';
-
-      final subscription = AppwriteClient.realtime.subscribe([channel]);
-      _realtimeSubscription = subscription.stream.listen((event) {
-        // Whenever the worker document is updated, reload documents
-        if (mounted) {
-          _worker = null;
-          _imageCache.clear();
-          _forceServerRefresh = true;
-          _loadDocuments();
-          // Also refresh the AuthBloc so other screens reflect the change
-          context.read<AuthBloc>().add(RefreshProfile());
-        }
-      });
-    } catch (_) {
-      // Realtime subscription is a nice-to-have; don't block the screen
-    }
   }
 
   Future<void> _loadDocuments() async {

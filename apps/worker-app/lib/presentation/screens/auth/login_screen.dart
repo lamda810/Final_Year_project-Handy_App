@@ -231,7 +231,10 @@ class _LoginScreenState extends State<LoginScreen> {
                         ),
                         GestureDetector(
                           onTap: () {
-                            Navigator.pushReplacementNamed(
+                            // A regular push (not pushReplacementNamed) so
+                            // Login stays on the stack and the Sign Up
+                            // screen gets a working back button.
+                            Navigator.pushNamed(
                               context,
                               AppRoutes.emailInput,
                             );

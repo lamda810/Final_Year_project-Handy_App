@@ -41,8 +41,8 @@ handy-go/
 
 - Node.js >= 20.0.0
 - pnpm >= 8.0.0
-- Docker & Docker Compose
-- Flutter SDK (for mobile apps)
+- FVM
+- Flutter `3.44.6` via FVM (for mobile apps)
 
 ### Installation
 
@@ -57,20 +57,38 @@ handy-go/
    pnpm install
    ```
 
-3. **Setup environment variables**
+3. **Install the pinned Flutter SDK with FVM**
+   ```bash
+   ./scripts/fvm use 3.44.6
+   ```
+
+   If the global `fvm` command is killed in your terminal, keep using `./scripts/fvm`.
+
+4. **Setup environment variables**
    ```bash
    cp .env.example .env
    # Edit .env with your configuration
    ```
 
-4. **Start infrastructure (MongoDB, Redis)**
-   ```bash
-   pnpm docker:up
-   ```
-
-5. **Start development servers**
+5. **Start the local backend**
    ```bash
    pnpm dev
+   ```
+
+   This starts the local no-Docker API gateway used by the admin panel and Flutter apps.
+
+6. **Run Flutter apps through FVM**
+   ```bash
+   cd apps/customer-app
+   ../../scripts/fvm flutter pub get
+   ../../scripts/fvm flutter run
+   ```
+
+   Or:
+   ```bash
+   cd apps/worker-app
+   fvm flutter pub get
+   fvm flutter run
    ```
 
 ## 📦 Services
@@ -98,20 +116,18 @@ handy-go/
 - **API Documentation**: Swagger/OpenAPI
 
 ### Mobile Apps
-- **Framework**: Flutter
+- **Framework**: Flutter via FVM (`3.44.6`)
 - **State Management**: flutter_bloc
 - **Local Storage**: Hive, Shared Preferences
 - **Maps**: Google Maps
 
 ### Admin Panel
-- **Framework**: Next.js 14 with React
-- **UI**: Tailwind CSS, shadcn/ui
+- **Framework**: Vite with React
+- **UI**: MUI
 - **State**: React Query
 
 ### Infrastructure
-- **Containerization**: Docker
-- **Orchestration**: Kubernetes
-- **IaC**: Terraform
+- **Local Development**: Node.js + Flutter via FVM
 - **CI/CD**: GitHub Actions
 
 ## 📝 API Documentation

@@ -2,20 +2,19 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import '../../blocs/auth/auth_bloc.dart';
-import '../../blocs/auth/auth_event.dart';
 import '../../blocs/auth/auth_state.dart';
 import '../../routes/app_routes.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/constants/app_spacing.dart';
 import '../../../data/models/worker_model.dart';
 import '../../../data/models/booking_model.dart';
-import '../../../core/appwrite/appwrite_client.dart';
-import '../../../core/appwrite/appwrite_config.dart';
-import '../../../data/repositories/appwrite_booking_repository.dart';
-import '../../../data/repositories/appwrite_worker_repository.dart';
 import '../earnings/earnings_screen.dart';
 import '../profile/profile_screen.dart';
 import '../../../core/services/location_service.dart';
+import '../../../core/utils/string_extensions.dart';
+import '../../../domain/repositories/booking_repository.dart';
+import '../../../domain/repositories/worker_repository.dart';
+import '../../../injection_container.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -33,15 +32,11 @@ class _HomeScreenState extends State<HomeScreen> {
   bool _isLoading = true;
   int _unreadNotificationCount = 0;
 
-  final AppwriteBookingRepository _bookingRepository =
-      AppwriteBookingRepository();
-  final AppwriteWorkerRepository _workerRepository = AppwriteWorkerRepository();
+  final BookingRepository _bookingRepository = sl<BookingRepository>();
+  final WorkerRepository _workerRepository = sl<WorkerRepository>();
 
-  // Realtime subscriptions for live updates
-  StreamSubscription? _bookingsSub;
-  StreamSubscription? _notificationsSub;
-  StreamSubscription? _workerProfileSub;
   StreamSubscription? _newBookingAlertSub;
+  Timer? _pollTimer;
 
   final LocationService _locationService = LocationService();
 
@@ -49,74 +44,21 @@ class _HomeScreenState extends State<HomeScreen> {
   void initState() {
     super.initState();
     _loadData();
-    _subscribeToRealtimeUpdates();
+    // Poll so a job cancelled/reassigned elsewhere (or a newly assigned
+    // one) is reflected here without the worker having to navigate away
+    // and back or pull to refresh.
+    _pollTimer = Timer.periodic(const Duration(seconds: 15), (_) {
+      if (mounted) _loadData(silent: true);
+    });
   }
 
   @override
   void dispose() {
-    _bookingsSub?.cancel();
-    _notificationsSub?.cancel();
-    _workerProfileSub?.cancel();
     _newBookingAlertSub?.cancel();
+    _pollTimer?.cancel();
     // Don't stop location tracking on dispose — the service is a singleton
     // and should keep tracking even when navigating away from home screen.
     super.dispose();
-  }
-
-  /// Subscribe to realtime channels for bookings, notifications, and worker
-  /// profile changes so the home screen stays up-to-date without polling.
-  void _subscribeToRealtimeUpdates() {
-    try {
-      // 1. Bookings collection — new jobs + status changes on active jobs
-      final bookingsSub = AppwriteClient.realtime.subscribe([
-        'tablesdb.${AppwriteConfig.databaseId}.tables.${AppwriteConfig.bookingsCollection}.rows',
-      ]);
-      _bookingsSub = bookingsSub.stream.listen((_) {
-        if (mounted) _refreshBookings();
-      });
-
-      // 2. Notifications collection — live unread count badge
-      final notifSub = AppwriteClient.realtime.subscribe([
-        'tablesdb.${AppwriteConfig.databaseId}.tables.${AppwriteConfig.notificationsCollection}.rows',
-      ]);
-      _notificationsSub = notifSub.stream.listen((event) {
-        // Only refresh count if the notification is for this user
-        _refreshNotificationCount();
-      });
-
-      // 3. Worker profile — stats, verification status, trust score changes
-      final workerId = _worker?.id;
-      if (workerId != null && workerId.isNotEmpty) {
-        _subscribeToWorkerProfile(workerId);
-      }
-    } catch (e) {
-      // Realtime is nice-to-have; don't crash if unavailable
-    }
-  }
-
-  void _subscribeToWorkerProfile(String workerId) {
-    _workerProfileSub?.cancel();
-    try {
-      final sub = AppwriteClient.realtime.subscribe([
-        'tablesdb.${AppwriteConfig.databaseId}.tables.${AppwriteConfig.workersCollection}.rows.$workerId',
-      ]);
-      _workerProfileSub = sub.stream.listen((_) async {
-        if (mounted) {
-          // Refresh AuthBloc so profile screen & home stats update together
-          context.read<AuthBloc>().add(RefreshProfile());
-          // Also reload local _worker so home screen stats update instantly
-          try {
-            final worker = await _workerRepository.getProfile();
-            if (mounted) {
-              setState(() {
-                _worker = worker;
-                _isAvailable = worker.availability.isAvailable;
-              });
-            }
-          } catch (_) {}
-        }
-      });
-    } catch (_) {}
   }
 
   /// Subscribe to new bookings assigned to this worker and show an alert popup
@@ -216,12 +158,13 @@ class _HomeScreenState extends State<HomeScreen> {
             child: const Text('Dismiss'),
           ),
           FilledButton(
-            onPressed: () {
+            onPressed: () async {
               Navigator.of(ctx).pop();
               if (bookingId.isNotEmpty) {
-                Navigator.of(
+                await Navigator.of(
                   context,
                 ).pushNamed(AppRoutes.bookingDetails, arguments: bookingId);
+                if (mounted) _loadData();
               }
             },
             child: const Text('View Details'),
@@ -231,47 +174,12 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  /// Lightweight refresh — only reloads bookings, not entire profile
-  Future<void> _refreshBookings() async {
-    try {
-      final available = await _bookingRepository.getAvailableBookings();
-      final active = await _bookingRepository.getWorkerBookings(
-        status: 'IN_PROGRESS',
-      );
-      if (mounted) {
-        setState(() {
-          _availableJobs = available;
-          _activeJobs = active;
-        });
-      }
-    } catch (_) {}
-  }
-
-  /// Refresh only the unread notification count badge
-  Future<void> _refreshNotificationCount() async {
-    try {
-      final user = await AppwriteClient.account.get();
-      final result = await AppwriteClient.tablesDB.listRows(
-        databaseId: AppwriteConfig.databaseId,
-        tableId: AppwriteConfig.notificationsCollection,
-        queries: [
-          'equal("recipientId", "${user.$id}")',
-          'equal("isRead", false)',
-          'limit(1)',
-        ],
-      );
-      if (mounted) {
-        setState(() {
-          _unreadNotificationCount = result.total;
-        });
-      }
-    } catch (_) {}
-  }
-
-  Future<void> _loadData() async {
-    setState(() {
-      _isLoading = true;
-    });
+  Future<void> _loadData({bool silent = false}) async {
+    if (!silent) {
+      setState(() {
+        _isLoading = true;
+      });
+    }
 
     try {
       final worker = await _workerRepository.getProfile();
@@ -281,22 +189,7 @@ class _HomeScreenState extends State<HomeScreen> {
       );
 
       // Load unread notification count
-      int unreadCount = 0;
-      try {
-        final user = await AppwriteClient.account.get();
-        final notifResult = await AppwriteClient.tablesDB.listRows(
-          databaseId: AppwriteConfig.databaseId,
-          tableId: AppwriteConfig.notificationsCollection,
-          queries: [
-            'equal("recipientId", "${user.$id}")',
-            'equal("isRead", false)',
-            'limit(1)',
-          ],
-        );
-        unreadCount = notifResult.total;
-      } catch (_) {
-        // Notifications count is best-effort
-      }
+      const unreadCount = 0;
 
       setState(() {
         _worker = worker;
@@ -313,10 +206,6 @@ class _HomeScreenState extends State<HomeScreen> {
       }
 
       // Subscribe to worker profile realtime once we have the ID
-      if (_workerProfileSub == null && worker.id.isNotEmpty) {
-        _subscribeToWorkerProfile(worker.id);
-      }
-
       // Subscribe to new booking alerts targeted at this worker
       if (_newBookingAlertSub == null && worker.id.isNotEmpty) {
         _subscribeToNewBookingAlerts(worker.id);
@@ -345,9 +234,16 @@ class _HomeScreenState extends State<HomeScreen> {
         return;
       }
 
-      // Request location permission before going online
+      // Request location permission before going online. Location is
+      // best-effort: a permission failure (or a platform exception, e.g.
+      // missing plist keys) must never block the availability update.
       if (!_isAvailable) {
-        final hasPermission = await _locationService.requestPermission();
+        bool hasPermission = false;
+        try {
+          hasPermission = await _locationService.requestPermission();
+        } catch (_) {
+          // Treat any platform error as "no permission" and continue
+        }
         if (!hasPermission && mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
@@ -398,15 +294,7 @@ class _HomeScreenState extends State<HomeScreen> {
       child: Scaffold(
         body: _isLoading
             ? const Center(child: CircularProgressIndicator())
-            : IndexedStack(
-                index: _currentIndex,
-                children: [
-                  _buildHomeTab(),
-                  _buildJobsTab(),
-                  _buildEarningsTab(),
-                  _buildProfileTab(),
-                ],
-              ),
+            : _buildCurrentTab(),
         bottomNavigationBar: BottomNavigationBar(
           currentIndex: _currentIndex,
           onTap: (index) => setState(() => _currentIndex = index),
@@ -438,6 +326,20 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
+  Widget _buildCurrentTab() {
+    switch (_currentIndex) {
+      case 1:
+        return _buildJobsTab();
+      case 2:
+        return _buildEarningsTab();
+      case 3:
+        return _buildProfileTab();
+      case 0:
+      default:
+        return _buildHomeTab();
+    }
+  }
+
   Widget _buildHomeTab() {
     return RefreshIndicator(
       onRefresh: _loadData,
@@ -453,7 +355,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   radius: 20,
                   backgroundColor: AppColors.primaryDark,
                   child: Text(
-                    _worker?.firstName.substring(0, 1).toUpperCase() ?? 'W',
+                    _worker?.firstName.initial('W') ?? 'W',
                     style: const TextStyle(
                       color: AppColors.textOnPrimary,
                       fontWeight: FontWeight.bold,
@@ -791,12 +693,15 @@ class _HomeScreenState extends State<HomeScreen> {
 
   Widget _buildActiveJobCard(BookingModel booking) {
     return GestureDetector(
-      onTap: () {
-        Navigator.pushNamed(
+      onTap: () async {
+        await Navigator.pushNamed(
           context,
           AppRoutes.activeJob,
           arguments: booking.id,
         );
+        // Refresh so a job completed/cancelled while viewing it (or its
+        // status otherwise changing) is reflected once we're back.
+        if (mounted) _loadData();
       },
       child: Container(
         width: 280,
@@ -898,12 +803,17 @@ class _HomeScreenState extends State<HomeScreen> {
   Widget _buildJobCard(BookingModel booking) {
     return Card(
       child: InkWell(
-        onTap: () {
-          Navigator.pushNamed(
+        onTap: () async {
+          await Navigator.pushNamed(
             context,
             AppRoutes.bookingDetails,
             arguments: booking.id,
           );
+          // Accepting/rejecting this job on the details screen doesn't
+          // mutate this screen's own _availableJobs list, so without this
+          // refresh the card would still show here with Accept/Reject
+          // actions even after the job was already accepted or rejected.
+          if (mounted) _loadData();
         },
         borderRadius: BorderRadius.circular(AppSpacing.radiusMD),
         child: Padding(
@@ -1062,7 +972,7 @@ class _HomeScreenState extends State<HomeScreen> {
 // Jobs Tab – shows booking history with status filter
 // ---------------------------------------------------------------------------
 class _JobsTab extends StatefulWidget {
-  final AppwriteBookingRepository repository;
+  final BookingRepository repository;
   const _JobsTab({required this.repository});
 
   @override
@@ -1074,6 +984,7 @@ class _JobsTabState extends State<_JobsTab>
   late TabController _tabController;
   final Map<String, List<BookingModel>> _bookings = {};
   final Map<String, bool> _loading = {};
+  Timer? _pollTimer;
   static const List<String> _filters = [
     'ALL',
     'PENDING',
@@ -1093,10 +1004,18 @@ class _JobsTabState extends State<_JobsTab>
       }
     });
     _loadIfNeeded('ALL');
+    // A job's status can change from elsewhere (customer cancels, this
+    // worker accepts it from the Home tab, etc.) — without this, a filter
+    // that's already been visited keeps showing its stale cached list
+    // until the user manually pulls to refresh.
+    _pollTimer = Timer.periodic(const Duration(seconds: 15), (_) {
+      if (mounted) _loadBookings(_filters[_tabController.index]);
+    });
   }
 
   @override
   void dispose() {
+    _pollTimer?.cancel();
     _tabController.dispose();
     super.dispose();
   }
@@ -1230,14 +1149,22 @@ class _JobsTabState extends State<_JobsTab>
       margin: const EdgeInsets.only(bottom: AppSpacing.sm),
       child: InkWell(
         borderRadius: BorderRadius.circular(12),
-        onTap: () {
+        onTap: () async {
           final isTerminal =
               booking.status == 'COMPLETED' || booking.status == 'CANCELLED';
-          Navigator.pushNamed(
+          await Navigator.pushNamed(
             context,
             isTerminal ? AppRoutes.bookingDetails : AppRoutes.activeJob,
             arguments: booking.id,
           );
+          // Invalidate every cached filter so a status change made while
+          // viewing this booking (accept/start/complete/cancel) is picked
+          // up next time each tab is (re)built, instead of showing stale
+          // cached lists indefinitely.
+          if (mounted) {
+            setState(_bookings.clear);
+            _loadBookings(_filters[_tabController.index]);
+          }
         },
         child: Padding(
           padding: const EdgeInsets.all(AppSpacing.md),

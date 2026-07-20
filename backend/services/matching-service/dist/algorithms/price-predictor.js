@@ -6,7 +6,7 @@ const typedPriceBaselines = priceBaselines;
  * Estimate price for a service
  */
 export const estimatePrice = async (data) => {
-    const { serviceCategory, problemDescription, city } = data;
+    const { serviceCategory, problemDescription, city, area, scheduledDateTime } = data;
     const priceFactors = [];
     // Get baseline pricing for category
     const categoryPricing = typedPriceBaselines[serviceCategory];
@@ -18,14 +18,39 @@ export const estimatePrice = async (data) => {
     const complexity = determineComplexity(problemDescription, serviceCategory);
     const baseline = categoryPricing[complexity];
     priceFactors.push(`${complexity.charAt(0).toUpperCase() + complexity.slice(1)} complexity job`);
-    // Apply location multiplier
-    const locationMultiplier = getLocationMultiplier(city);
+    // Apply basic city location multiplier
+    let locationMultiplier = getLocationMultiplier(city);
     if (locationMultiplier !== 1) {
-        priceFactors.push(`${city} area rate adjustment`);
+        priceFactors.push(`${city} base area rate adjustment`);
     }
-    // Calculate labor costs
-    let laborMin = Math.round(baseline.laborMin * locationMultiplier);
-    let laborMax = Math.round(baseline.laborMax * locationMultiplier);
+    // AI Area-Based Intelligence
+    if (area) {
+        const areaMultiplier = getAreaMultiplier(city, area);
+        locationMultiplier *= areaMultiplier;
+        if (areaMultiplier > 1)
+            priceFactors.push(`High demand area logic applied (${area})`);
+        if (areaMultiplier < 1)
+            priceFactors.push(`Low demand area adjustment (${area})`);
+    }
+    // Peak Hours / Dynamic Time Computation
+    let timeMultiplier = 1.0;
+    if (scheduledDateTime) {
+        const targetDate = new Date(scheduledDateTime);
+        const hour = targetDate.getHours();
+        // Peak hours: 8am-10am and 6pm-10pm
+        if ((hour >= 8 && hour <= 10) || (hour >= 18 && hour <= 22)) {
+            timeMultiplier = 1.25; // 25% surge for peak slots
+            priceFactors.push('Peak hour demand surge pricing (+25%)');
+        }
+        // Late night surcharge: 11pm-6am
+        else if (hour >= 23 || hour <= 6) {
+            timeMultiplier = 1.60; // 60% surge for late night
+            priceFactors.push('Late night availability explicitly priced (+60%)');
+        }
+    }
+    // Calculate labor costs dynamically combining base + area + time surge
+    let laborMin = Math.round(baseline.laborMin * locationMultiplier * timeMultiplier);
+    let laborMax = Math.round(baseline.laborMax * locationMultiplier * timeMultiplier);
     // Get historical data for similar jobs
     const historicalData = await getHistoricalPricing(serviceCategory, city);
     if (historicalData.count > 5) {
@@ -140,6 +165,19 @@ const getLocationMultiplier = (city) => {
     const normalizedCity = city.toLowerCase().trim();
     const multipliers = config.pricing.locationMultipliers;
     return multipliers[normalizedCity] || multipliers.default || 1;
+};
+/**
+ * Get dynamic area-based (neighborhood) price intelligence
+ * Currently mocks high/medium/low traffic sectors
+ */
+const getAreaMultiplier = (city, area) => {
+    const normalizedArea = area.toLowerCase().trim();
+    // Example busy tech hubs or commercial zones logic
+    const busyAreas = ['dha', 'clifton', 'bahria', 'blue area', 'saddar', 'gulberg', 'commercial'];
+    const isBusy = busyAreas.some(b => normalizedArea.includes(b));
+    if (isBusy)
+        return 1.2; // 20% premium for busy commercial/upper-class areas
+    return 1.0;
 };
 /**
  * Get historical pricing data for similar jobs

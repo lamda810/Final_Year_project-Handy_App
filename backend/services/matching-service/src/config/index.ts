@@ -9,7 +9,9 @@ dotenv.config({ path: resolve(__dirname, '../../../../../.env') });
 export const config = {
   nodeEnv: process.env.NODE_ENV || 'development',
   port: parseInt(process.env.MATCHING_SERVICE_PORT || process.env.PORT || '3004', 10),
-  mongodbUri: process.env.MONGODB_URI || 'mongodb://localhost:27017/handygo',
+  mongodbUri:
+    process.env.MONGODB_URI ||
+    'mongodb://handygo_app:handygo_app_password@localhost:27017/handygo?authSource=handygo',
   corsOrigin: process.env.CORS_ORIGIN || '*',
 
   // JWT configuration

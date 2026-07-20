@@ -403,6 +403,7 @@ class WorkerBasicInfo extends Equatable {
   final String lastName;
   final String? profileImage;
   final String? phone;
+  final String? contactPhone;
   final double rating;
   final int totalJobs;
 
@@ -412,6 +413,7 @@ class WorkerBasicInfo extends Equatable {
     required this.lastName,
     this.profileImage,
     this.phone,
+    this.contactPhone,
     this.rating = 0,
     this.totalJobs = 0,
   });
@@ -424,12 +426,18 @@ class WorkerBasicInfo extends Equatable {
       lastName: json['lastName'] ?? '',
       profileImage: json['profileImage'],
       phone: json['user']?['phone'] ?? json['phone'],
+      contactPhone: json['contactPhone'],
       rating: (ratingData['average'] ?? 0).toDouble(),
       totalJobs: json['totalJobsCompleted'] ?? 0,
     );
   }
 
   String get fullName => '$firstName $lastName';
+
+  /// Prefer the worker's optional alternate contact number over their
+  /// login phone for calling purposes.
+  String? get callablePhone =>
+      (contactPhone != null && contactPhone!.isNotEmpty) ? contactPhone : phone;
 
   @override
   List<Object?> get props => [
@@ -438,6 +446,7 @@ class WorkerBasicInfo extends Equatable {
     lastName,
     profileImage,
     phone,
+    contactPhone,
     rating,
     totalJobs,
   ];
@@ -473,6 +482,26 @@ class BookingCreateRequest extends Equatable {
       'paymentMethod': paymentMethod,
       if (images != null) 'images': images,
     };
+  }
+
+  BookingCreateRequest copyWith({
+    String? serviceCategory,
+    String? problemDescription,
+    BookingAddress? address,
+    DateTime? scheduledDateTime,
+    bool? isUrgent,
+    List<String>? images,
+    String? paymentMethod,
+  }) {
+    return BookingCreateRequest(
+      serviceCategory: serviceCategory ?? this.serviceCategory,
+      problemDescription: problemDescription ?? this.problemDescription,
+      address: address ?? this.address,
+      scheduledDateTime: scheduledDateTime ?? this.scheduledDateTime,
+      isUrgent: isUrgent ?? this.isUrgent,
+      images: images ?? this.images,
+      paymentMethod: paymentMethod ?? this.paymentMethod,
+    );
   }
 
   @override

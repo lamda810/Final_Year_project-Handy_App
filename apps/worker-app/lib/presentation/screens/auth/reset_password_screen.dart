@@ -11,12 +11,12 @@ import '../../routes/app_routes.dart';
 /// Reset password screen after OTP verification.
 class ResetPasswordScreen extends StatefulWidget {
   final String tempToken;
-  final String email;
+  final String phone;
 
   const ResetPasswordScreen({
     super.key,
     required this.tempToken,
-    required this.email,
+    required this.phone,
   });
 
   @override
@@ -127,7 +127,7 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
 
                   // Subtext
                   Text(
-                    'Your identity has been verified. Set a new password for ${widget.email}',
+                    'Your identity has been verified. Set a new password for ${widget.phone}',
                     style: TextStyle(
                       fontSize: 16,
                       color: Theme.of(

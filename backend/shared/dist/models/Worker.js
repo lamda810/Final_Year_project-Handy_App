@@ -122,6 +122,11 @@ const workerSchema = new Schema({
         type: String,
         trim: true,
     },
+    contactPhone: {
+        type: String,
+        trim: true,
+        match: [/^(\+92|0)?3[0-9]{9}$/, 'Contact number must be a valid Pakistani mobile number'],
+    },
     cnic: {
         type: String,
         required: [true, 'CNIC is required'],

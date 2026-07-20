@@ -6,16 +6,16 @@ import '../../data/models/worker_model.dart';
 /// Depend on this interface (not the concrete class) so that
 /// screens and BLoCs stay decoupled from the Appwrite SDK.
 abstract class AuthRepository {
-  /// Send a one-time password to [email] for the given [purpose].
+  /// Send a one-time password to [phone] for the given [purpose].
   ///
   /// Purpose is typically `'REGISTRATION'`, `'LOGIN'`, or `'PASSWORD_RESET'`.
-  Future<Map<String, dynamic>> sendOTP(String email, String purpose);
+  Future<Map<String, dynamic>> sendOTP(String phone, String purpose);
 
-  /// Verify the OTP [code] sent to [email].
+  /// Verify the OTP [code] sent to [phone].
   ///
-  /// Returns a map with at least `isNewUser` (bool) and `userId` (String).
+  /// Returns a map with at least `isNewUser` (bool) and `tempToken` (String).
   Future<Map<String, dynamic>> verifyOTP(
-    String email,
+    String phone,
     String code,
     String purpose,
   );
@@ -38,8 +38,8 @@ abstract class AuthRepository {
   /// Returns session info / tokens.
   Future<Map<String, dynamic>> login(String email, String password);
 
-  /// Initiate the forgot-password flow for [email].
-  Future<void> forgotPassword(String email);
+  /// Initiate the forgot-password flow for [phone].
+  Future<void> forgotPassword(String phone);
 
   /// Reset the password using a [tempToken] obtained from OTP verification.
   Future<void> resetPassword(String tempToken, String newPassword);

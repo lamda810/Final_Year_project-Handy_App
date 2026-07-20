@@ -1,104 +1,60 @@
 /**
- * SOS API — Emergency alert management for admin panel.
+ * SOS API — local backend emergency alert management for admin panel.
  */
-import { Query } from 'appwrite';
-import { account, databases, functions } from '../appwrite-client';
-import { appwriteConfig } from '../appwrite-config';
+import { apiRequest, getData } from './client';
 
-const { databaseId, collections, functions: fnIds } = appwriteConfig;
+const mapSOS = (doc: any) => ({
+  _id: doc._id,
+  booking: doc.booking
+    ? {
+        bookingNumber: doc.booking.bookingNumber ?? doc.booking._id,
+        serviceCategory: doc.booking.serviceCategory ?? 'Unknown',
+      }
+    : undefined,
+  initiatedBy: {
+    userType: doc.initiatedBy?.userType ?? 'CUSTOMER',
+    userId: doc.initiatedBy?.userId?._id ?? doc.initiatedBy?.userId ?? '',
+    name: doc.initiatedBy?.userId?.phone ?? 'Unknown',
+    phone: doc.initiatedBy?.userId?.phone ?? '',
+  },
+  priority: doc.priority ?? 'LOW',
+  reason: doc.reason ?? '',
+  description: doc.description ?? '',
+  location: doc.location ?? { coordinates: [0, 0] },
+  status: doc.status ?? 'ACTIVE',
+  createdAt: doc.createdAt,
+});
 
 export const sosApi = {
   getActiveSOS: async () => {
-    const result = await databases.listDocuments(
-      databaseId,
-      collections.sosAlerts,
-      [
-        Query.notEqual('status', 'RESOLVED'),
-        Query.orderDesc('priority'),
-        Query.orderDesc('$createdAt'),
-        Query.limit(100),
-      ],
-    );
+    const { data } = await getData<any[]>('/sos/admin/active', { page: 1, limit: 100 });
 
     return {
       success: true,
-      alerts: result.documents.map((doc) => ({
-        _id: doc.$id,
-        booking: doc.bookingNumber
-          ? { bookingNumber: doc.bookingNumber, serviceCategory: doc.serviceCategory ?? '' }
-          : undefined,
-        initiatedBy: {
-          userType: doc.initiatedByType,
-          userId: doc.initiatedByUserId,
-          name: doc.initiatedByName ?? 'Unknown',
-          phone: doc.initiatedByPhone ?? '',
-        },
-        priority: doc.priority,
-        aiAssessedPriority: doc.aiAssessedPriority,
-        reason: doc.reason,
-        description: doc.description,
-        location: {
-          coordinates: doc.latitude != null
-            ? [doc.longitude, doc.latitude] as [number, number]
-            : [0, 0] as [number, number],
-          address: doc.address ?? '',
-        },
-        evidence: {
-          images: doc.evidenceImages ? JSON.parse(doc.evidenceImages) : [],
-          audioRecording: doc.audioRecording,
-        },
-        status: doc.status,
-        assignedAdmin: doc.assignedAdminId,
-        resolution: doc.resolutionAction
-          ? {
-              action: doc.resolutionAction,
-              resolvedBy: doc.resolvedById,
-              resolvedAt: doc.resolvedAt,
-              notes: doc.resolutionNotes,
-            }
-          : null,
-        createdAt: doc.$createdAt,
-      })),
+      alerts: (data ?? []).map(mapSOS),
     };
   },
 
   assignSOS: async (sosId: string) => {
-    const user = await account.get();
-    await databases.updateDocument(
-      databaseId,
-      collections.sosAlerts,
-      sosId,
-      { assignedAdminId: user.$id },
-    );
+    await apiRequest(`/sos/admin/${sosId}/assign`, {
+      method: 'POST',
+    });
     return { success: true };
   },
 
   resolveSOS: async (sosId: string, data: { action: string; notes: string }) => {
-    const currentUser = await account.get();
-    await functions.createExecution(
-      fnIds.sosAnalyzer,
-      JSON.stringify({
-        action: 'resolve',
-        sosId,
-        resolutionAction: data.action,
-        resolvedBy: currentUser.$id,
-        notes: data.notes,
-      }),
-    );
-    return { success: true };
+    const response = await apiRequest<any>(`/sos/admin/${sosId}/resolve`, {
+      method: 'POST',
+      body: data,
+    });
+    return { success: true, sos: response.data ? mapSOS(response.data) : null };
   },
 
   escalateSOS: async (sosId: string, data: { reason: string }) => {
-    const currentUser = await account.get();
-    await functions.createExecution(
-      fnIds.sosAnalyzer,
-      JSON.stringify({
-        action: 'escalate',
-        sosId,
-        reason: data.reason,
-        escalatedBy: currentUser.$id,
-      }),
-    );
+    await apiRequest(`/sos/admin/${sosId}/escalate`, {
+      method: 'POST',
+      body: data,
+    });
     return { success: true };
   },
 };

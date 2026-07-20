@@ -13,7 +13,7 @@ class UserRemoteDataSourceImpl implements UserRemoteDataSource {
   Future<CustomerModel> getProfile() async {
     try {
       final response = await _dio.get('/users/customer/profile');
-      return CustomerModel.fromJson(response.data);
+      return CustomerModel.fromJson(response.data['data'] ?? response.data);
     } on DioException catch (e) {
       throw _handleDioError(e);
     }
@@ -24,23 +24,25 @@ class UserRemoteDataSourceImpl implements UserRemoteDataSource {
     String? firstName,
     String? lastName,
     String? email,
-    String? phone,
+    String? contactPhone,
     String? profileImage,
     String? preferredLanguage,
   }) async {
     try {
-      final response = await _dio.patch(
+      // Backend only registers PUT for this route (router.put('/profile', ...))
+      // — PATCH 404s silently, which had made this endpoint a no-op.
+      final response = await _dio.put(
         '/users/customer/profile',
         data: {
           if (firstName != null) 'firstName': firstName,
           if (lastName != null) 'lastName': lastName,
           if (email != null) 'email': email,
-          if (phone != null) 'phone': phone,
+          if (contactPhone != null) 'contactPhone': contactPhone,
           if (profileImage != null) 'profileImage': profileImage,
           if (preferredLanguage != null) 'preferredLanguage': preferredLanguage,
         },
       );
-      return CustomerModel.fromJson(response.data);
+      return CustomerModel.fromJson(response.data['data'] ?? response.data);
     } on DioException catch (e) {
       throw _handleDioError(e);
     }
@@ -50,7 +52,7 @@ class UserRemoteDataSourceImpl implements UserRemoteDataSource {
   Future<List<AddressModel>> getAddresses() async {
     try {
       final response = await _dio.get('/users/customer/addresses');
-      final list = response.data as List;
+      final list = (response.data['data'] ?? response.data) as List;
       return list.map((e) => AddressModel.fromJson(e)).toList();
     } on DioException catch (e) {
       throw _handleDioError(e);
@@ -58,35 +60,44 @@ class UserRemoteDataSourceImpl implements UserRemoteDataSource {
   }
 
   @override
-  Future<AddressModel> addAddress(AddressModel address) async {
+  Future<List<AddressModel>> addAddress(AddressModel address) async {
     try {
       final response = await _dio.post(
         '/users/customer/addresses',
         data: address.toJson(),
       );
-      return AddressModel.fromJson(response.data);
+      final list = (response.data['data'] ?? response.data) as List;
+      return list.map((e) => AddressModel.fromJson(e)).toList();
     } on DioException catch (e) {
       throw _handleDioError(e);
     }
   }
 
   @override
-  Future<AddressModel> updateAddress(String addressId, AddressModel address) async {
+  Future<List<AddressModel>> updateAddress(String addressId, AddressModel address) async {
     try {
-      final response = await _dio.patch(
+      final response = await _dio.put(
         '/users/customer/addresses/$addressId',
         data: address.toJson(),
       );
-      return AddressModel.fromJson(response.data);
+      final list = (response.data['data'] ?? response.data) as List;
+      return list.map((e) => AddressModel.fromJson(e)).toList();
     } on DioException catch (e) {
       throw _handleDioError(e);
     }
   }
 
   @override
-  Future<void> setDefaultAddress(String addressId) async {
+  Future<List<AddressModel>> setDefaultAddress(String addressId) async {
     try {
-      await _dio.post('/users/customer/addresses/$addressId/default');
+      // There is no dedicated "set default" endpoint; it's just an update
+      // with isDefault: true (the backend unsets all other defaults).
+      final response = await _dio.put(
+        '/users/customer/addresses/$addressId',
+        data: {'isDefault': true},
+      );
+      final list = (response.data['data'] ?? response.data) as List;
+      return list.map((e) => AddressModel.fromJson(e)).toList();
     } on DioException catch (e) {
       throw _handleDioError(e);
     }

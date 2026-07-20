@@ -96,6 +96,7 @@ class CustomerInfo {
   final String lastName;
   final String? profileImage;
   final String phone;
+  final String? contactPhone;
 
   CustomerInfo({
     required this.id,
@@ -103,19 +104,32 @@ class CustomerInfo {
     required this.lastName,
     this.profileImage,
     required this.phone,
+    this.contactPhone,
   });
 
   factory CustomerInfo.fromJson(Map<String, dynamic> json) {
+    // `user` is populated as a full object by some endpoints (e.g. booking
+    // details) but left as a raw ObjectId string by others (e.g. accept,
+    // which only populates 'user firstName lastName' without expanding
+    // the user ref) — guard against both shapes.
+    final userField = json['user'];
+    final userPhone = userField is Map ? userField['phone'] : null;
     return CustomerInfo(
       id: json['_id'] ?? json['id'] ?? '',
       firstName: json['firstName'] ?? '',
       lastName: json['lastName'] ?? '',
       profileImage: json['profileImage'],
-      phone: json['user']?['phone'] ?? json['phone'] ?? '',
+      phone: userPhone ?? json['phone'] ?? '',
+      contactPhone: json['contactPhone'],
     );
   }
 
   String get fullName => '$firstName $lastName';
+
+  /// Prefer the customer's optional alternate contact number over their
+  /// login phone for calling purposes.
+  String? get callablePhone =>
+      (contactPhone != null && contactPhone!.isNotEmpty) ? contactPhone : phone;
 
   Map<String, dynamic> toJson() {
     return {
@@ -124,6 +138,7 @@ class CustomerInfo {
       'lastName': lastName,
       'profileImage': profileImage,
       'phone': phone,
+      'contactPhone': contactPhone,
     };
   }
 }
@@ -176,7 +191,11 @@ class BookingModel {
       id: json['_id'] ?? json['id'] ?? '',
       bookingNumber: json['bookingNumber'] ?? '',
       customer: CustomerInfo.fromJson(json['customer'] ?? {}),
-      workerId: json['worker'],
+      // `worker` is a populated object on some endpoints and a raw ObjectId
+      // string on others (e.g. the accept response) — only ever store the id.
+      workerId: json['worker'] is Map
+          ? (json['worker']['_id'] ?? json['worker']['id'])
+          : json['worker'],
       serviceCategory: json['serviceCategory'] ?? '',
       problemDescription: json['problemDescription'] ?? '',
       aiDetectedServices: (json['aiDetectedServices'] as List<dynamic>?)

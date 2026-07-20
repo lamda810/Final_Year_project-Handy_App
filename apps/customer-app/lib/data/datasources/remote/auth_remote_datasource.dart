@@ -33,4 +33,7 @@ abstract class AuthRemoteDataSource {
     required String tempToken,
     required String newPassword,
   });
+
+  /// End the current authenticated session on the backend.
+  Future<void> logout();
 }

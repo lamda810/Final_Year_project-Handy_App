@@ -1,3 +1,7 @@
+import 'dart:io' show Platform;
+
+import 'package:flutter/foundation.dart';
+
 /// API endpoints for Handy Go backend services
 class ApiEndpoints {
   ApiEndpoints._();
@@ -18,18 +22,33 @@ class ApiEndpoints {
   // static const String _host = 'your-subdomain.ngrok.io';
   // static const bool _useHttps = true;
 
-  // Option 4: Production Server
-  static const String _host = 'handy-go-1y91.onrender.com';
-  static const bool _useHttps = true;
+  static const String _configuredBaseUrl = String.fromEnvironment(
+    'API_BASE_URL',
+    defaultValue: '',
+  );
 
-  // ========================================================
-  // CURRENT SETTING: Cloud Deployment (Render)
-  // ========================================================
-  static const int _port = 443; // Standard HTTPS port
+  // ngrok tunnel to the local backend (port 3000), used for testing on a
+  // real device over WiFi instead of the Android emulator's 10.0.2.2 alias.
+  // Free-tier ngrok URLs change every time the tunnel restarts — if
+  // requests stop reaching the backend, get the current URL from
+  // `curl http://localhost:4040/api/tunnels` and update this constant.
+  static const String _ngrokBaseUrl =
+      'https://turniplike-snarkily-alita.ngrok-free.dev/api';
+
+  static String get _defaultLocalBaseUrl {
+    if (kIsWeb) {
+      return 'http://localhost:3000/api';
+    }
+
+    if (Platform.isAndroid) {
+      return _ngrokBaseUrl;
+    }
+
+    return 'http://localhost:3000/api';
+  }
 
   static String get baseUrl {
-    final protocol = _useHttps ? 'https' : 'http';
-    return '$protocol://$_host/api';
+    return _configuredBaseUrl.isNotEmpty ? _configuredBaseUrl : _defaultLocalBaseUrl;
   }
 
   // Auth endpoints
@@ -37,6 +56,7 @@ class ApiEndpoints {
   static const String verifyOTP = '/auth/verify-otp';
   static const String registerCustomer = '/auth/register/customer';
   static const String login = '/auth/login';
+  static const String logout = '/auth/logout';
   static const String refreshToken = '/auth/refresh-token';
   static const String forgotPassword = '/auth/forgot-password';
   static const String resetPassword = '/auth/reset-password';
@@ -54,6 +74,7 @@ class ApiEndpoints {
   static String selectWorker(String id) => '/bookings/$id/select-worker';
   static String cancelBooking(String id) => '/bookings/$id/cancel';
   static String rateBooking(String id) => '/bookings/$id/rate';
+  static String bookingMessages(String id) => '/bookings/$id/messages';
 
   // Matching endpoints
   static const String analyzeProblem = '/matching/analyze-problem';

@@ -60,6 +60,7 @@ class UserBloc extends Bloc<UserEvent, UserState> {
         firstName: event.firstName,
         lastName: event.lastName,
         email: event.email,
+        contactPhone: event.contactPhone,
         profileImage: event.profileImage,
         preferredLanguage: event.preferredLanguage,
       );
@@ -118,8 +119,7 @@ class UserBloc extends Bloc<UserEvent, UserState> {
         isDefault: event.isDefault,
       );
 
-      final newAddress = await _userRepository.addAddress(addressToAdd);
-      _cachedAddresses = [..._cachedAddresses, newAddress];
+      _cachedAddresses = await _userRepository.addAddress(addressToAdd);
 
       emit(
         AddressActionSuccess(
@@ -166,14 +166,10 @@ class UserBloc extends Bloc<UserEvent, UserState> {
         city: event.city,
       );
 
-      final updatedAddress = await _userRepository.updateAddress(
+      _cachedAddresses = await _userRepository.updateAddress(
         event.addressId,
         addressToUpdate,
       );
-
-      _cachedAddresses = _cachedAddresses.map((addr) {
-        return addr.id == event.addressId ? updatedAddress : addr;
-      }).toList();
 
       emit(
         AddressActionSuccess(
@@ -235,12 +231,9 @@ class UserBloc extends Bloc<UserEvent, UserState> {
     emit(const UserLoading(message: 'Setting default address...'));
 
     try {
-      await _userRepository.setDefaultAddress(event.addressId);
-
-      // Update cache: unset all defaults, set specified one
-      _cachedAddresses = _cachedAddresses.map((addr) {
-        return addr.copyWith(isDefault: addr.id == event.addressId);
-      }).toList();
+      _cachedAddresses = await _userRepository.setDefaultAddress(
+        event.addressId,
+      );
 
       emit(
         AddressActionSuccess(

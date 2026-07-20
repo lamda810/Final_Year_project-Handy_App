@@ -51,6 +51,7 @@ export interface IWorker extends Document {
     firstName: string;
     lastName: string;
     profileImage?: string;
+    contactPhone?: string;
     cnic: string;
     cnicVerified: boolean;
     cnicImages: {

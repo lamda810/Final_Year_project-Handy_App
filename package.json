@@ -10,7 +10,13 @@
     "packages/*"
   ],
   "scripts": {
-    "dev": "concurrently \"pnpm --filter ./backend/api-gateway run dev\" \"pnpm --filter ./backend/services/* run dev\"",
+    "dev": "pnpm run backend:dev:watch",
+    "backend:build": "pnpm --filter './backend/**' run build",
+    "backend:dev": "pnpm --filter @handy-go/shared build && NODE_ENV=development LOCAL_DEV_MODE=true pnpm --filter @handy-go/api-gateway exec tsx src/index.ts",
+    "backend:dev:watch": "pnpm --filter @handy-go/shared build && NODE_ENV=development LOCAL_DEV_MODE=true pnpm --filter @handy-go/api-gateway run dev",
+    "backend:dev:full": "pnpm --filter @handy-go/shared build && concurrently \"pnpm --filter @handy-go/api-gateway exec tsx src/index.ts\" \"pnpm -r --parallel --filter './backend/services/*' exec tsx src/index.ts\"",
+    "backend:dev:full:watch": "pnpm --filter @handy-go/shared build && concurrently \"pnpm --filter @handy-go/shared run dev\" \"pnpm --filter @handy-go/api-gateway run dev\" \"pnpm -r --parallel --filter './backend/services/*' run dev\"",
+    "backend:seed": "pnpm --filter @handy-go/shared build && pnpm --filter @handy-go/scripts run seed",
     "build": "pnpm -r run build",
     "test": "pnpm -r run test",
     "lint": "pnpm -r run lint",

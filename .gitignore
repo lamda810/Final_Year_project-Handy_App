@@ -2,11 +2,16 @@ node_modules
 .env
 logs/
 *.log
+.localdb/
 dist/
 build/
+.fvm/
 .vscode/
 .idea/
 *.exe
 *.dll
 *.so
 *.dylib
+
+# Locally-stored uploads (dev-only image storage, see api-gateway/src/routes/upload.routes.ts)
+backend/api-gateway/uploads/

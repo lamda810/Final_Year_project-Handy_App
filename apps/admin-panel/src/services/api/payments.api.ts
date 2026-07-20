@@ -1,53 +1,51 @@
 /**
- * Payments API — Transaction & wallet management for admin panel.
+ * Payments API — local synthetic payment views derived from bookings.
  */
-import { Query } from 'appwrite';
-import { databases } from '../appwrite-client';
-import { appwriteConfig } from '../appwrite-config';
+import { getData } from './client';
 
-const { databaseId, collections } = appwriteConfig;
+const mapTransaction = (booking: any) => {
+  const amount = booking.pricing?.finalPrice || booking.pricing?.estimatedPrice || 0;
+  const statusMap: Record<string, string> = {
+    COMPLETED: 'COMPLETED',
+    CANCELLED: 'REVERSED',
+    PENDING: 'PENDING',
+    ACCEPTED: 'PENDING',
+    IN_PROGRESS: 'PENDING',
+  };
+
+  return {
+    _id: booking._id,
+    userId: booking.customer?._id ?? '',
+    type: booking.status === 'CANCELLED' ? 'REFUND' : 'BOOKING_DEBIT',
+    amount,
+    status: statusMap[booking.status] ?? 'PENDING',
+    bookingId: booking._id,
+    paymentMethod: 'LOCAL',
+    description: `${booking.serviceCategory ?? 'Service'} booking`,
+    gatewayReference: booking.bookingNumber ?? null,
+    createdAt: booking.createdAt,
+    updatedAt: booking.updatedAt ?? booking.createdAt,
+  };
+};
 
 export const paymentsApi = {
   /**
    * Get aggregate transaction counts by type and a revenue summary.
    */
   getTransactionStats: async () => {
-    const countFor = async (type?: string, status?: string) => {
-      const q: string[] = [Query.limit(1)];
-      if (type) q.push(Query.equal('type', type));
-      if (status) q.push(Query.equal('status', status));
-      const res = await databases.listDocuments(databaseId, collections.transactions, q);
-      return res.total;
+    const { data } = await getData<any>('/bookings/admin/stats', { period: 'month' });
+    const summary = data?.summary ?? {};
+
+    return {
+      total: summary.totalBookings ?? 0,
+      topUps: 0,
+      bookingPayments: summary.completedBookings ?? 0,
+      earnings: 0,
+      withdrawals: 0,
+      refunds: summary.cancelledBookings ?? 0,
+      completed: summary.completedBookings ?? 0,
+      totalRevenue: summary.totalPlatformFees ?? 0,
     };
-
-    const [total, topUps, bookingPayments, earnings, withdrawals, refunds, completed] =
-      await Promise.all([
-        countFor(),
-        countFor('TOP_UP'),
-        countFor('BOOKING_DEBIT'),
-        countFor('EARNING'),
-        countFor('WITHDRAWAL'),
-        countFor('REFUND'),
-        countFor(undefined, 'COMPLETED'),
-      ]);
-
-    // Revenue: sum of platform_fee transactions (best-effort via listing recent)
-    let totalRevenue = 0;
-    try {
-      const feeTxns = await databases.listDocuments(databaseId, collections.transactions, [
-        Query.equal('type', 'PLATFORM_FEE'),
-        Query.equal('status', 'COMPLETED'),
-        Query.limit(5000),
-      ]);
-      totalRevenue = feeTxns.documents.reduce(
-        (sum, d) => sum + (typeof d.amount === 'number' ? d.amount : 0),
-        0,
-      );
-    } catch {
-      // collection may not have PLATFORM_FEE rows yet
-    }
-
-    return { total, topUps, bookingPayments, earnings, withdrawals, refunds, completed, totalRevenue };
   },
 
   /**
@@ -60,38 +58,30 @@ export const paymentsApi = {
     status?: string;
     search?: string;
   }) => {
-    const page = params?.page ?? 1;
-    const limit = params?.limit ?? 10;
-    const offset = (page - 1) * limit;
+    const { data, meta } = await getData<any[]>('/bookings/admin', {
+      page: params?.page ?? 1,
+      limit: params?.limit ?? 10,
+    });
 
-    const queries: string[] = [
-      Query.limit(limit),
-      Query.offset(offset),
-      Query.orderDesc('$createdAt'),
-    ];
+    let transactions = (data ?? []).map(mapTransaction);
 
-    if (params?.type) queries.push(Query.equal('type', params.type));
-    if (params?.status) queries.push(Query.equal('status', params.status));
-    if (params?.search) queries.push(Query.search('description', params.search));
+    if (params?.type) {
+      transactions = transactions.filter((txn) => txn.type === params.type);
+    }
 
-    const result = await databases.listDocuments(databaseId, collections.transactions, queries);
+    if (params?.status) {
+      transactions = transactions.filter((txn) => txn.status === params.status);
+    }
+
+    if (params?.search) {
+      const needle = params.search.toLowerCase();
+      transactions = transactions.filter((txn) => txn.description.toLowerCase().includes(needle));
+    }
 
     return {
       success: true,
-      transactions: result.documents.map((doc) => ({
-        _id: doc.$id,
-        userId: doc.userId ?? '',
-        type: doc.type ?? '',
-        amount: doc.amount ?? 0,
-        status: doc.status ?? 'PENDING',
-        bookingId: doc.bookingId ?? null,
-        paymentMethod: doc.paymentMethod ?? null,
-        description: doc.description ?? '',
-        gatewayReference: doc.gatewayReference ?? null,
-        createdAt: doc.$createdAt,
-        updatedAt: doc.$updatedAt,
-      })),
-      total: result.total,
+      transactions,
+      total: meta?.total ?? transactions.length,
     };
   },
 
@@ -99,34 +89,10 @@ export const paymentsApi = {
    * List all wallets with optional pagination.
    */
   getWallets: async (params?: { page?: number; limit?: number; search?: string }) => {
-    const page = params?.page ?? 1;
-    const limit = params?.limit ?? 10;
-    const offset = (page - 1) * limit;
-
-    const queries: string[] = [
-      Query.limit(limit),
-      Query.offset(offset),
-      Query.orderDesc('$updatedAt'),
-    ];
-
-    if (params?.search) queries.push(Query.search('userId', params.search));
-
-    const result = await databases.listDocuments(databaseId, collections.wallets, queries);
-
     return {
       success: true,
-      wallets: result.documents.map((doc) => ({
-        _id: doc.$id,
-        userId: doc.userId ?? '',
-        balance: doc.balance ?? 0,
-        currency: doc.currency ?? 'PKR',
-        status: doc.status ?? 'ACTIVE',
-        lastTopUpAt: doc.lastTopUpAt ?? null,
-        lastWithdrawalAt: doc.lastWithdrawalAt ?? null,
-        createdAt: doc.$createdAt,
-        updatedAt: doc.$updatedAt,
-      })),
-      total: result.total,
+      wallets: [],
+      total: 0,
     };
   },
 };

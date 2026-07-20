@@ -39,11 +39,12 @@ export const authLimiter = rateLimit({
 });
 /**
  * OTP Request Rate Limiter
- * 3 OTP requests per hour
+ * 3 OTP requests per hour in production; relaxed in development so local
+ * testing/iteration isn't blocked by the same 1-hour cooldown.
  */
 export const otpLimiter = rateLimit({
     windowMs: 60 * 60 * 1000, // 1 hour
-    max: 3,
+    max: process.env.NODE_ENV === 'production' ? 3 : 100,
     message: {
         success: false,
         message: 'Too many OTP requests, please try again after 1 hour',

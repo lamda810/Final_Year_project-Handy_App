@@ -1,10 +1,20 @@
 import Joi from 'joi';
 
+// Separate from the login phone (which is immutable) — an optional
+// alternate number customers/workers can give out for calls.
+const contactPhoneSchema = Joi.string()
+  .pattern(/^(\+92|0)?3[0-9]{9}$/)
+  .allow('')
+  .messages({
+    'string.pattern.base': 'Contact number must be a valid Pakistani mobile number (e.g., +923001234567 or 03001234567)',
+  });
+
 export const updateCustomerProfileSchema = Joi.object({
   firstName: Joi.string().min(2).max(50).trim(),
   lastName: Joi.string().min(2).max(50).trim(),
   email: Joi.string().email().lowercase().trim(),
   profileImage: Joi.string().uri().trim(),
+  contactPhone: contactPhoneSchema,
   preferredLanguage: Joi.string().valid('en', 'ur'),
 });
 
@@ -35,6 +45,7 @@ export const updateWorkerProfileSchema = Joi.object({
   lastName: Joi.string().min(2).max(50).trim(),
   email: Joi.string().email().lowercase().trim(),
   profileImage: Joi.string().uri().trim(),
+  contactPhone: contactPhoneSchema,
   skills: Joi.array().items(
     Joi.object({
       category: Joi.string().valid(

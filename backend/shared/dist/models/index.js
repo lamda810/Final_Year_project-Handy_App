@@ -8,4 +8,5 @@ export { Notification } from './Notification.js';
 export { Review } from './Review.js';
 export { OTP } from './OTP.js';
 export { TokenBlacklist } from './TokenBlacklist.js';
+export { ChatMessage } from './ChatMessage.js';
 //# sourceMappingURL=index.js.map

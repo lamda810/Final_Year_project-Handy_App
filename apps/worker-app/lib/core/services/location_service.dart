@@ -1,7 +1,8 @@
 import 'dart:async';
 import 'package:geolocator/geolocator.dart';
-import '../../data/repositories/appwrite_worker_repository.dart';
-import '../../data/repositories/appwrite_booking_repository.dart';
+import '../../domain/repositories/booking_repository.dart';
+import '../../domain/repositories/worker_repository.dart';
+import '../../injection_container.dart';
 
 /// Centralized location service for the worker app.
 ///
@@ -17,8 +18,8 @@ class LocationService {
   factory LocationService() => _instance;
   LocationService._internal();
 
-  final AppwriteWorkerRepository _workerRepo = AppwriteWorkerRepository();
-  final AppwriteBookingRepository _bookingRepo = AppwriteBookingRepository();
+  final WorkerRepository _workerRepo = sl<WorkerRepository>();
+  final BookingRepository _bookingRepo = sl<BookingRepository>();
 
   Timer? _idleTimer;
   Timer? _activeJobTimer;

@@ -1,11 +1,12 @@
 import 'dart:async';
-import 'package:appwrite/appwrite.dart';
+import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
+import 'package:get_it/get_it.dart';
 import 'package:url_launcher/url_launcher.dart';
-import '../../../core/appwrite/appwrite_client.dart';
-import '../../../core/appwrite/appwrite_config.dart';
+import '../../../core/constants/api_endpoints.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/constants/app_spacing.dart';
+import '../../../core/network/dio_client.dart';
 
 /// Chat screen for customer to communicate with worker
 class ChatScreen extends StatefulWidget {
@@ -27,10 +28,10 @@ class ChatScreen extends StatefulWidget {
 class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
   final TextEditingController _messageController = TextEditingController();
   final ScrollController _scrollController = ScrollController();
+  final Dio _dio = GetIt.instance<DioClient>().dio;
   final List<ChatMessage> _messages = [];
   bool _isLoading = true;
   bool _isSending = false;
-  RealtimeSubscription? _subscription;
   Timer? _pollTimer;
 
   @override
@@ -38,8 +39,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
     _loadMessages();
-    _subscribeToMessages();
-    // Polling fallback: reload messages every 5s in case realtime misses events
+    // Poll for new messages every 5s
     _pollTimer = Timer.periodic(const Duration(seconds: 5), (_) {
       if (mounted && !_isLoading) _loadMessages();
     });
@@ -50,9 +50,6 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
     if (state == AppLifecycleState.resumed && mounted) {
       // Reload messages when app comes back to foreground
       _loadMessages();
-      // Re-subscribe in case WebSocket was disconnected
-      _subscription?.close();
-      _subscribeToMessages();
     }
   }
 
@@ -62,34 +59,28 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
     _pollTimer?.cancel();
     _messageController.dispose();
     _scrollController.dispose();
-    _subscription?.close();
     super.dispose();
   }
 
   Future<void> _loadMessages() async {
     try {
       debugPrint('[Chat] Loading messages for booking: ${widget.bookingId}');
-      final tablesDB = AppwriteClient.tablesDB;
-      final result = await tablesDB.listRows(
-        databaseId: AppwriteConfig.databaseId,
-        tableId: AppwriteConfig.chatMessagesCollection,
-        queries: [
-          Query.equal('bookingId', widget.bookingId),
-          Query.orderAsc('\$createdAt'),
-          Query.limit(100),
-        ],
+      final response = await _dio.get(
+        ApiEndpoints.bookingMessages(widget.bookingId),
       );
+      final rows = (response.data['data'] as List<dynamic>? ?? []);
 
-      debugPrint('[Chat] Fetched ${result.rows.length} messages from server');
+      debugPrint('[Chat] Fetched ${rows.length} messages from server');
 
       final fetched = <ChatMessage>[];
-      for (final row in result.rows) {
+      for (final row in rows) {
         fetched.add(
           ChatMessage(
-            id: row.$id,
-            text: row.data['message'] ?? '',
-            isFromWorker: row.data['senderType'] == 'WORKER',
-            timestamp: DateTime.tryParse(row.$createdAt) ?? DateTime.now(),
+            id: row['_id'] ?? '',
+            text: row['message'] ?? '',
+            isFromWorker: row['senderType'] == 'WORKER',
+            timestamp:
+                DateTime.tryParse(row['createdAt'] ?? '') ?? DateTime.now(),
           ),
         );
       }
@@ -135,67 +126,6 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
     }
   }
 
-  /// Subscribe to new chat messages for this booking.
-  /// Subscribes to the entire chat_messages collection; client-side filter
-  /// by bookingId ensures only messages for this conversation are shown.
-  void _subscribeToMessages() {
-    try {
-      final realtime = AppwriteClient.realtime;
-      final channel =
-          'tablesdb.${AppwriteConfig.databaseId}.tables.${AppwriteConfig.chatMessagesCollection}.rows';
-      debugPrint('[Chat] Subscribing to Realtime channel: $channel');
-      _subscription = realtime.subscribe([channel]);
-
-      _subscription!.stream.listen(
-        (event) {
-          debugPrint('[Chat] Realtime event received: ${event.events}');
-          // Handle create, update, and any other event types
-          final data = event.payload;
-          if (data.isNotEmpty) {
-            final msgBookingId =
-                data['bookingId'] ?? data['data']?['bookingId'];
-            debugPrint(
-              '[Chat] Realtime message bookingId: $msgBookingId (mine: ${widget.bookingId})',
-            );
-            if (msgBookingId == widget.bookingId) {
-              final newMessage = ChatMessage(
-                id: data['\$id'] ?? '',
-                text: data['message'] ?? data['data']?['message'] ?? '',
-                isFromWorker:
-                    (data['senderType'] ?? data['data']?['senderType']) ==
-                    'WORKER',
-                timestamp:
-                    DateTime.tryParse(data['\$createdAt'] ?? '') ??
-                    DateTime.now(),
-              );
-
-              // Avoid duplicates from our own optimistic add
-              if (mounted && !_messages.any((m) => m.id == newMessage.id)) {
-                debugPrint(
-                  '[Chat] Adding new Realtime message: ${newMessage.id} from ${newMessage.isFromWorker ? "WORKER" : "CUSTOMER"}',
-                );
-                setState(() => _messages.add(newMessage));
-                _scrollToBottom();
-              }
-            }
-          }
-        },
-        onError: (error) {
-          debugPrint('[Chat] Realtime stream error: $error');
-        },
-        onDone: () {
-          debugPrint('[Chat] Realtime stream closed, attempting reconnect...');
-          // Attempt reconnect after a delay
-          Future.delayed(const Duration(seconds: 3), () {
-            if (mounted) _subscribeToMessages();
-          });
-        },
-      );
-    } catch (e) {
-      debugPrint('[Chat] Failed to subscribe to Realtime: $e');
-    }
-  }
-
   Future<void> _sendMessage() async {
     final text = _messageController.text.trim();
     if (text.isEmpty || _isSending) return;
@@ -219,18 +149,12 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
       debugPrint(
         '[Chat] Sending message to booking ${widget.bookingId}: "${text.length > 50 ? text.substring(0, 50) : text}"',
       );
-      final tablesDB = AppwriteClient.tablesDB;
-      final row = await tablesDB.createRow(
-        databaseId: AppwriteConfig.databaseId,
-        tableId: AppwriteConfig.chatMessagesCollection,
-        rowId: ID.unique(),
-        data: {
-          'bookingId': widget.bookingId,
-          'message': text,
-          'senderType': 'CUSTOMER',
-        },
+      final response = await _dio.post(
+        ApiEndpoints.bookingMessages(widget.bookingId),
+        data: {'message': text},
       );
-      debugPrint('[Chat] Message sent successfully, id: ${row.$id}');
+      final row = response.data['data'] as Map<String, dynamic>? ?? {};
+      debugPrint('[Chat] Message sent successfully, id: ${row['_id']}');
 
       // Replace temp message with real one
       if (mounted) {
@@ -238,7 +162,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
           final idx = _messages.indexWhere((m) => m.id == tempId);
           if (idx != -1) {
             _messages[idx] = ChatMessage(
-              id: row.$id,
+              id: row['_id'] ?? tempId,
               text: text,
               isFromWorker: false,
               timestamp: DateTime.now(),
@@ -575,7 +499,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
                 // TODO: Implement attachment picker:
                 //  1. Show bottom sheet with Camera / Gallery / File options
                 //  2. Use image_picker or file_picker packages
-                //  3. Upload via Appwrite Storage, then send URL as message
+                //  3. Upload to backend storage, then send URL as message
                 ScaffoldMessenger.of(context).showSnackBar(
                   const SnackBar(
                     content: Text(

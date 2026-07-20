@@ -1,12 +1,10 @@
 import 'dart:async';
 import 'dart:io';
-import 'package:appwrite/appwrite.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:image_picker/image_picker.dart';
-import '../../../core/appwrite/appwrite_client.dart';
-import '../../../core/appwrite/appwrite_config.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/constants/app_spacing.dart';
 import '../../blocs/booking/booking_bloc.dart';
@@ -17,8 +15,14 @@ import '../../blocs/booking/booking_state.dart';
 class SOSScreen extends StatefulWidget {
   final String? bookingId;
   final String? workerName;
+  final String? workerPhone;
 
-  const SOSScreen({super.key, this.bookingId, this.workerName});
+  const SOSScreen({
+    super.key,
+    this.bookingId,
+    this.workerName,
+    this.workerPhone,
+  });
 
   @override
   State<SOSScreen> createState() => _SOSScreenState();
@@ -150,37 +154,30 @@ class _SOSScreenState extends State<SOSScreen> with TickerProviderStateMixin {
     setState(() => _evidenceImages.removeAt(index));
   }
 
-  /// Upload all evidence images to the sos_evidence bucket.
-  /// Returns list of file URLs.
-  Future<List<String>> _uploadEvidence() async {
-    final urls = <String>[];
-    final storage = AppwriteClient.storage;
-    for (final image in _evidenceImages) {
-      try {
-        final file = await storage.createFile(
-          bucketId: AppwriteConfig.sosEvidenceBucket,
-          fileId: ID.unique(),
-          file: InputFile.fromPath(path: image.path),
-        );
-        urls.add(
-          '${AppwriteConfig.endpoint}/storage/buckets/${AppwriteConfig.sosEvidenceBucket}/files/${file.$id}/view?project=${AppwriteConfig.projectId}',
-        );
-      } catch (_) {
-        // Upload failure should not block SOS
-      }
+  Future<void> _callWorker() async {
+    final phone = widget.workerPhone;
+    if (phone == null || phone.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Worker phone number not available'),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+      return;
     }
-    return urls;
+    final uri = Uri.parse('tel:$phone');
+    if (await canLaunchUrl(uri)) {
+      await launchUrl(uri);
+    }
   }
 
   void _triggerSOS() async {
     if (_isSubmitting) return;
     setState(() => _isSubmitting = true);
 
-    // Upload evidence images (best-effort)
-    List<String> evidenceUrls = [];
-    if (_evidenceImages.isNotEmpty) {
-      evidenceUrls = await _uploadEvidence();
-    }
+    // TODO: Upload evidence images once the backend exposes a storage
+    // endpoint. For now the count is noted in the SOS description and the
+    // photos stay on the device.
 
     // Get current location
     double lat = 0.0;
@@ -203,8 +200,8 @@ class _SOSScreenState extends State<SOSScreen> with TickerProviderStateMixin {
         reason: _selectedReason ?? 'Other',
         description:
             _descriptionController.text.trim() +
-            (evidenceUrls.isNotEmpty
-                ? '\n\n[Evidence: ${evidenceUrls.length} image(s) uploaded]'
+            (_evidenceImages.isNotEmpty
+                ? '\n\n[Evidence: ${_evidenceImages.length} image(s) captured on device]'
                 : ''),
         lat: lat,
         lng: lng,
@@ -366,6 +363,13 @@ class _SOSScreenState extends State<SOSScreen> with TickerProviderStateMixin {
                             ],
                           ),
                         ),
+                        if (widget.workerPhone != null &&
+                            widget.workerPhone!.isNotEmpty)
+                          OutlinedButton.icon(
+                            onPressed: _callWorker,
+                            icon: const Icon(Icons.call, size: 18),
+                            label: const Text('Call Worker'),
+                          ),
                       ],
                     ),
                   ),

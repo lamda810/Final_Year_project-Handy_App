@@ -1,13 +1,13 @@
 {
   "project_info": {
-    "project_number": "338889841807",
-    "project_id": "workerpushnotification",
-    "storage_bucket": "workerpushnotification.firebasestorage.app"
+    "project_number": "141699561146",
+    "project_id": "handy-go-92c32",
+    "storage_bucket": "handy-go-92c32.firebasestorage.app"
   },
   "client": [
     {
       "client_info": {
-        "mobilesdk_app_id": "1:338889841807:android:19fadc01ed99b8643124fa",
+        "mobilesdk_app_id": "1:141699561146:android:b0dcc7e7ae3fa3c0e2f483",
         "android_client_info": {
           "package_name": "com.handygo.worker_app"
         }
@@ -15,7 +15,7 @@
       "oauth_client": [],
       "api_key": [
         {
-          "current_key": "AIzaSyBmXaEXpFV3R5-UK3z1h61A7gncMW3aWqk"
+          "current_key": "AIzaSyCYydDY5_76OIxTAxGl_VNvh-SIwQrjVwE"
         }
       ],
       "services": {

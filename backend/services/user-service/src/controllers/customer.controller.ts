@@ -32,7 +32,7 @@ export const getProfile = asyncHandler(async (req: Request, res: Response) => {
  */
 export const updateProfile = asyncHandler(async (req: Request, res: Response) => {
   const userId = req.user!.id;
-  const { firstName, lastName, email, profileImage, preferredLanguage } = req.body;
+  const { firstName, lastName, email, profileImage, contactPhone, preferredLanguage } = req.body;
 
   const customer = await Customer.findOne({ user: userId });
 
@@ -44,6 +44,7 @@ export const updateProfile = asyncHandler(async (req: Request, res: Response) =>
   if (firstName) customer.firstName = firstName;
   if (lastName) customer.lastName = lastName;
   if (profileImage) customer.profileImage = profileImage;
+  if (contactPhone !== undefined) customer.contactPhone = contactPhone || undefined;
   if (preferredLanguage) customer.preferredLanguage = preferredLanguage;
 
   // Update email in User model if provided

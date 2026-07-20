@@ -12,9 +12,10 @@ class OTPVerificationResult extends Equatable {
   });
 
   factory OTPVerificationResult.fromJson(Map<String, dynamic> json) {
+    final data = json['data'] ?? json;
     return OTPVerificationResult(
-      isNewUser: json['isNewUser'] ?? true,
-      tempToken: json['tempToken'] ?? '',
+      isNewUser: data['isNewUser'] ?? true,
+      tempToken: data['tempToken'] ?? '',
     );
   }
 
@@ -35,10 +36,11 @@ class AuthResponse extends Equatable {
   });
 
   factory AuthResponse.fromJson(Map<String, dynamic> json) {
+    final data = json['data'] ?? json;
     return AuthResponse(
-      user: UserModel.fromJson(json['user']),
-      accessToken: json['accessToken'] ?? '',
-      refreshToken: json['refreshToken'] ?? '',
+      user: UserModel.fromJson(data['user']),
+      accessToken: data['accessToken'] ?? '',
+      refreshToken: data['refreshToken'] ?? '',
     );
   }
 
@@ -62,7 +64,7 @@ class OTPSendResponse extends Equatable {
     return OTPSendResponse(
       success: json['success'] ?? false,
       message: json['message'] ?? '',
-      otpId: json['otpId'],
+      otpId: json['data']?['otpId'],
     );
   }
 

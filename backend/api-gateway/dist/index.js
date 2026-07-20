@@ -9,6 +9,7 @@ import { authenticate } from './middleware/auth.js';
 import { authRateLimiter, authenticatedRateLimiter, sosRateLimiter } from './middleware/rateLimiter.js';
 import { requestId, requestLogger, securityHeaders, handlePreflight, } from './middleware/common.js';
 import { setupProxies } from './middleware/proxy.js';
+import { createLocalDevProtectedRouter, createLocalDevPublicRouter } from './local-dev/router.js';
 const app = express();
 // ==================== Global Middleware ====================
 // Trust proxy (for rate limiting and IP detection behind reverse proxy)
@@ -50,10 +51,15 @@ app.get('/health', (req, res) => {
         service: 'api-gateway',
         timestamp: new Date().toISOString(),
         environment: config.nodeEnv,
+        node_env: process.env.NODE_ENV,
         services: Object.entries(config.services).map(([name, url]) => ({
             name,
             url,
         })),
+        debug: {
+            has_auth_url: !!process.env.AUTH_SERVICE_URL,
+            auth_url_value: process.env.AUTH_SERVICE_URL || 'MISSING',
+        }
     });
 });
 app.get('/api/health', (req, res) => {
@@ -61,22 +67,34 @@ app.get('/api/health', (req, res) => {
         status: 'healthy',
         service: 'api-gateway',
         timestamp: new Date().toISOString(),
+        localDevMode: config.localDevMode,
     });
 });
 // ==================== Rate Limiting ====================
 // Apply rate limiting based on route
 app.use('/api/auth', authRateLimiter);
 app.use('/api/sos', sosRateLimiter);
+if (config.localDevMode) {
+    logger.info('Running API Gateway in local dev mode without Docker or microservices');
+    app.use(createLocalDevPublicRouter());
+}
 // ==================== Authentication ====================
 // Authenticate requests (skips public routes)
 app.use(authenticate);
 // Apply authenticated rate limiter after auth
 app.use(authenticatedRateLimiter);
+if (config.localDevMode) {
+    app.use(createLocalDevProtectedRouter());
+}
 // ==================== Service Proxies ====================
 // Set up proxies to microservices
-setupProxies(app);
+if (!config.localDevMode) {
+    setupProxies(app);
+}
 // ==================== 404 Handler ====================
 app.use((req, res) => {
+    if (res.headersSent)
+        return;
     res.status(404).json({
         success: false,
         message: 'Route not found',
@@ -91,6 +109,10 @@ app.use((err, req, res, next) => {
         path: req.path,
         method: req.method,
     });
+    // Guard: proxy onError may have already sent a response
+    if (res.headersSent) {
+        return next(err);
+    }
     res.status(err.status || 500).json({
         success: false,
         message: config.nodeEnv === 'production'
@@ -104,6 +126,7 @@ const startServer = () => {
     const server = app.listen(config.port, () => {
         logger.info(`🚀 API Gateway running on port ${config.port}`);
         logger.info(`Environment: ${config.nodeEnv}`);
+        logger.info(`Local dev mode: ${config.localDevMode ? 'enabled' : 'disabled'}`);
         logger.info('Configured services:');
         Object.entries(config.services).forEach(([name, url]) => {
             logger.info(`  - ${name}: ${url}`);
@@ -134,10 +157,9 @@ process.on('unhandledRejection', (reason, promise) => {
 process.on('uncaughtException', (error) => {
     console.error('Uncaught Exception:', error);
     logger.error('Uncaught Exception:', error);
-    // Don't exit immediately in development - let's see what's happening
-    if (config.nodeEnv === 'production') {
-        process.exit(1);
-    }
+    // Node.js docs: state is undefined after uncaughtException — always exit.
+    // In production, a process manager (PM2/k8s) will restart the process.
+    process.exit(1);
 });
 // Graceful shutdown
 process.on('SIGTERM', () => {

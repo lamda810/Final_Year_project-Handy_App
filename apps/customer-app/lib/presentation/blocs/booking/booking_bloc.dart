@@ -80,7 +80,21 @@ class BookingBloc extends Bloc<BookingEvent, BookingState> {
     emit(const BookingLoading(message: 'Creating your booking...'));
 
     try {
-      final result = await _bookingRepository.createBooking(event.request);
+      var request = event.request;
+      if (request.images != null && request.images!.isNotEmpty) {
+        emit(const BookingLoading(message: 'Uploading photos...'));
+        // request.images arrive as local device file paths (picked via
+        // image_picker) — upload each one and swap in the server URL,
+        // since a local path is meaningless to anyone but this device.
+        final uploadedUrls = <String>[];
+        for (final path in request.images!) {
+          uploadedUrls.add(await _bookingRepository.uploadImage(path));
+        }
+        request = request.copyWith(images: uploadedUrls);
+        emit(const BookingLoading(message: 'Creating your booking...'));
+      }
+
+      final result = await _bookingRepository.createBooking(request);
       emit(
         BookingCreated(
           booking: result.booking,

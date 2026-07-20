@@ -1,12 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:image_picker/image_picker.dart';
-import 'package:appwrite/appwrite.dart' show ID, InputFile;
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../../../app.dart';
-import '../../../core/appwrite/appwrite_client.dart';
-import '../../../core/appwrite/appwrite_config.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/constants/app_spacing.dart';
 import '../../../core/routes/app_routes.dart';
@@ -127,6 +124,18 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     context.read<UserBloc>().add(const LoadProfileRequested());
                   },
                   child: const Text('Retry'),
+                ),
+                const SizedBox(height: AppSpacing.sm),
+                // Escape hatch when the profile can't load (e.g. an expired
+                // or invalid session): allow logging out to reach the login
+                // screen again.
+                TextButton.icon(
+                  onPressed: () => _showLogoutConfirmation(context),
+                  icon: const Icon(Icons.logout, color: AppColors.error),
+                  label: const Text(
+                    'Logout',
+                    style: TextStyle(color: AppColors.error),
+                  ),
                 ),
               ],
             ),
@@ -540,51 +549,54 @@ class _ProfileScreenState extends State<ProfileScreen> {
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
 
-    return ListTile(
-      dense: true,
-      visualDensity: const VisualDensity(horizontal: 0, vertical: -1),
-      leading: Container(
-        padding: const EdgeInsets.all(AppSpacing.sm),
-        decoration: BoxDecoration(
-          color: colorScheme.surfaceContainerHighest,
-          borderRadius: BorderRadius.circular(AppSpacing.radiusSm),
+    return Material(
+      type: MaterialType.transparency,
+      child: ListTile(
+        dense: true,
+        visualDensity: const VisualDensity(horizontal: 0, vertical: -1),
+        leading: Container(
+          padding: const EdgeInsets.all(AppSpacing.sm),
+          decoration: BoxDecoration(
+            color: colorScheme.surfaceContainerHighest,
+            borderRadius: BorderRadius.circular(AppSpacing.radiusSm),
+          ),
+          child: Icon(
+            item.icon,
+            color: colorScheme.onSurface.withValues(alpha: 0.7),
+            size: 20,
+          ),
         ),
-        child: Icon(
-          item.icon,
-          color: colorScheme.onSurface.withValues(alpha: 0.7),
-          size: 20,
+        title: Text(
+          item.title,
+          style: TextStyle(fontSize: 15, color: colorScheme.onSurface),
         ),
-      ),
-      title: Text(
-        item.title,
-        style: TextStyle(fontSize: 15, color: colorScheme.onSurface),
-      ),
-      trailing: item.isSwitch
-          ? Switch(
-              value: item.switchValue ?? false,
-              onChanged: (_) => item.onTap(),
-              activeThumbColor: AppColors.primary,
-            )
-          : Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                if (item.trailing != null)
-                  Text(
-                    item.trailing ?? '',
-                    style: TextStyle(
-                      fontSize: 14,
-                      color: colorScheme.onSurface.withValues(alpha: 0.7),
+        trailing: item.isSwitch
+            ? Switch(
+                value: item.switchValue ?? false,
+                onChanged: (_) => item.onTap(),
+                activeThumbColor: AppColors.primary,
+              )
+            : Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  if (item.trailing != null)
+                    Text(
+                      item.trailing ?? '',
+                      style: TextStyle(
+                        fontSize: 14,
+                        color: colorScheme.onSurface.withValues(alpha: 0.7),
+                      ),
                     ),
-                  ),
-                const SizedBox(width: 4),
-                if (!item.isSwitch)
-                  Icon(
-                    Icons.chevron_right,
-                    color: colorScheme.onSurface.withValues(alpha: 0.5),
-                  ),
-              ],
-            ),
-      onTap: item.isSwitch ? null : item.onTap,
+                  const SizedBox(width: 4),
+                  if (!item.isSwitch)
+                    Icon(
+                      Icons.chevron_right,
+                      color: colorScheme.onSurface.withValues(alpha: 0.5),
+                    ),
+                ],
+              ),
+        onTap: item.isSwitch ? null : item.onTap,
+      ),
     );
   }
 
@@ -613,7 +625,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
   Future<void> _pickAndUploadProfileImage(BuildContext context) async {
     final messenger = ScaffoldMessenger.of(context);
-    final userBloc = context.read<UserBloc>();
 
     final source = await showModalBottomSheet<ImageSource>(
       context: context,
@@ -644,48 +655,14 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
     if (picked == null || !mounted) return;
 
-    // Show loading
+    // TODO: Upload the picked image once the backend exposes a storage
+    // endpoint, then send its URL via UpdateProfileRequested(profileImage: …).
     messenger.showSnackBar(
       const SnackBar(
-        content: Text('Uploading profile photo...'),
-        duration: Duration(seconds: 10),
+        content: Text('Profile photo upload is not available yet'),
+        duration: Duration(seconds: 2),
       ),
     );
-
-    try {
-      final storage = AppwriteClient.storage;
-      final fileId = ID.unique();
-      await storage.createFile(
-        bucketId: AppwriteConfig.profileImagesBucket,
-        fileId: fileId,
-        file: InputFile.fromPath(
-          path: picked.path,
-          filename: 'profile_$fileId.jpg',
-        ),
-      );
-
-      // Construct the public URL for the file
-      final imageUrl =
-          '${AppwriteConfig.endpoint}/storage/buckets/${AppwriteConfig.profileImagesBucket}/files/$fileId/view?project=${AppwriteConfig.projectId}';
-
-      userBloc.add(UpdateProfileRequested(profileImage: imageUrl));
-
-      messenger.hideCurrentSnackBar();
-      messenger.showSnackBar(
-        const SnackBar(
-          content: Text('Profile photo updated!'),
-          duration: Duration(seconds: 2),
-        ),
-      );
-    } catch (e) {
-      messenger.hideCurrentSnackBar();
-      messenger.showSnackBar(
-        SnackBar(
-          content: Text('Failed to upload photo: $e'),
-          duration: const Duration(seconds: 3),
-        ),
-      );
-    }
   }
 
   Future<void> _toggleDarkMode() async {
@@ -706,6 +683,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
   void _showEditProfileDialog(BuildContext context, CustomerModel profile) {
     final firstNameController = TextEditingController(text: profile.firstName);
     final lastNameController = TextEditingController(text: profile.lastName);
+    final contactPhoneController = TextEditingController(
+      text: profile.contactPhone ?? '',
+    );
 
     showDialog(
       context: context,
@@ -729,6 +709,17 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 border: OutlineInputBorder(),
               ),
             ),
+            const SizedBox(height: AppSpacing.md),
+            TextField(
+              controller: contactPhoneController,
+              keyboardType: TextInputType.phone,
+              decoration: const InputDecoration(
+                labelText: 'Contact Number',
+                hintText: 'e.g. 03001234567',
+                helperText: 'Used by workers to call you. Optional.',
+                border: OutlineInputBorder(),
+              ),
+            ),
           ],
         ),
         actions: [
@@ -740,23 +731,39 @@ class _ProfileScreenState extends State<ProfileScreen> {
             onPressed: () {
               final firstName = firstNameController.text.trim();
               final lastName = lastNameController.text.trim();
+              final contactPhone = contactPhoneController.text.trim();
+              final phonePattern = RegExp(r'^(\+92|0)?3[0-9]{9}$');
 
-              if (firstName.isNotEmpty && lastName.isNotEmpty) {
-                context.read<UserBloc>().add(
-                  UpdateProfileRequested(
-                    firstName: firstName,
-                    lastName: lastName,
-                  ),
-                );
-                Navigator.pop(dialogContext);
-              } else {
+              if (firstName.isEmpty || lastName.isEmpty) {
                 ScaffoldMessenger.of(context).showSnackBar(
                   const SnackBar(
                     content: Text('First name and last name are required'),
                     backgroundColor: AppColors.error,
                   ),
                 );
+                return;
               }
+
+              if (contactPhone.isNotEmpty && !phonePattern.hasMatch(contactPhone)) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text(
+                      'Enter a valid Pakistani mobile number (e.g. 03001234567)',
+                    ),
+                    backgroundColor: AppColors.error,
+                  ),
+                );
+                return;
+              }
+
+              context.read<UserBloc>().add(
+                UpdateProfileRequested(
+                  firstName: firstName,
+                  lastName: lastName,
+                  contactPhone: contactPhone,
+                ),
+              );
+              Navigator.pop(dialogContext);
             },
             child: const Text('Save'),
           ),

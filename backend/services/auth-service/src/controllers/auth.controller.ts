@@ -322,17 +322,20 @@ export const registerWorker = asyncHandler(async (req: Request, res: Response) =
  */
 export const login = asyncHandler(async (req: Request, res: Response) => {
   // Validate input
-  const { value, error } = validate<{ phone: string; password: string }>(loginSchema, req.body);
+  const { value, error } = validate<{ phone?: string; email?: string; password: string }>(
+    loginSchema,
+    req.body
+  );
 
   if (error) {
     const errors = error.details.map(d => ({ field: d.path[0]?.toString(), message: d.message }));
     return validationErrorResponse(res, errors);
   }
 
-  const phone = normalizePhoneNumber(value.phone);
-
-  // Find user with password
-  const user = await User.findByPhone(phone);
+  // Find user with password, by phone or email
+  const user = value.phone
+    ? await User.findByPhone(normalizePhoneNumber(value.phone))
+    : await User.findOne({ email: value.email!.toLowerCase() }).select('+password');
 
   if (!user) {
     return unauthorizedResponse(res, 'Invalid phone number or password');
@@ -370,7 +373,7 @@ export const login = asyncHandler(async (req: Request, res: Response) => {
   // Generate tokens
   const tokens = generateTokenPair(user._id.toString(), user.role);
 
-  logger.info(`User logged in: ${phone}`);
+  logger.info(`User logged in: ${user.phone}`);
 
   return successResponse(
     res,

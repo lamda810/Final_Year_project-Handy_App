@@ -7,7 +7,8 @@ dotenv.config({ path: resolve(__dirname, '../../../../../.env') });
 export const config = {
     nodeEnv: process.env.NODE_ENV || 'development',
     port: parseInt(process.env.NOTIFICATION_SERVICE_PORT || process.env.PORT || '3005', 10),
-    mongoUri: process.env.MONGODB_URI || 'mongodb://localhost:27017/handygo',
+    mongoUri: process.env.MONGODB_URI ||
+        'mongodb://handygo_app:handygo_app_password@localhost:27017/handygo?authSource=handygo',
     jwt: {
         secret: process.env.JWT_SECRET || 'your-super-secret-jwt-key-change-in-production',
     },

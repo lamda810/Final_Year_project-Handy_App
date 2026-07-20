@@ -1,0 +1,14 @@
+#!/usr/bin/env sh
+
+set -eu
+
+FVM_DART="${HOME}/.fvm_flutter/bin/src/dart"
+FVM_SNAPSHOT="${HOME}/.fvm_flutter/bin/src/fvm.snapshot"
+
+if [ ! -x "$FVM_DART" ] || [ ! -f "$FVM_SNAPSHOT" ]; then
+  echo "FVM runtime not found at ${HOME}/.fvm_flutter/bin/src." >&2
+  echo "Install FVM first, then run this command again." >&2
+  exit 1
+fi
+
+exec "$FVM_DART" "$FVM_SNAPSHOT" "$@"

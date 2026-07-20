@@ -1,199 +1,152 @@
 /**
- * Users API — Customer & worker management for admin panel.
+ * Users API — local backend customer & worker management.
  */
-import { Query } from 'appwrite';
-import { databases, functions } from '../appwrite-client';
-import { appwriteConfig } from '../appwrite-config';
-import { mapWorkerDoc } from './mappers';
+import { getData, apiRequest } from './client';
 
-const { databaseId, collections, functions: fnIds } = appwriteConfig;
+const monthStart = new Date(new Date().getFullYear(), new Date().getMonth(), 1);
+
+const mapCustomer = (doc: any) => {
+  const user = doc.user ?? {};
+
+  return {
+    _id: user._id ?? doc.user ?? doc._id,
+    firstName: doc.firstName ?? '',
+    lastName: doc.lastName ?? '',
+    profileImage: doc.profileImage,
+    phone: user.phone ?? '',
+    email: user.email ?? '',
+    addresses: Array.isArray(doc.addresses) ? doc.addresses : [],
+    totalBookings: doc.totalBookings ?? 0,
+    isActive: user.isActive ?? true,
+    createdAt: user.createdAt ?? doc.createdAt,
+  };
+};
+
+const mapWorker = (doc: any) => {
+  const user = doc.user ?? {};
+
+  return {
+    _id: doc._id,
+    userId: user._id ?? doc.user,
+    firstName: doc.firstName ?? '',
+    lastName: doc.lastName ?? '',
+    profileImage: doc.profileImage,
+    phone: user.phone ?? '',
+    cnic: doc.cnic ?? '',
+    cnicVerified: doc.cnicVerified ?? false,
+    skills: Array.isArray(doc.skills) ? doc.skills : [],
+    rating: doc.rating ?? { average: 0, count: 0 },
+    trustScore: doc.trustScore ?? 0,
+    totalJobsCompleted: doc.totalJobsCompleted ?? 0,
+    status: doc.status ?? 'PENDING_VERIFICATION',
+    createdAt: user.createdAt ?? doc.createdAt,
+  };
+};
 
 export const usersApi = {
-  /** Paginated customer list */
   getCustomers: async (params?: { page?: number; limit?: number; search?: string }) => {
-    const page = params?.page ?? 1;
-    const limit = params?.limit ?? 10;
-    const offset = (page - 1) * limit;
-
-    const queries: string[] = [
-      Query.limit(limit),
-      Query.offset(offset),
-      Query.orderDesc('$createdAt'),
-    ];
-    if (params?.search) {
-      queries.push(Query.search('firstName', params.search));
-    }
-
-    const result = await databases.listDocuments(databaseId, collections.customers, queries);
+    const { data, meta } = await getData<any[]>('/users/admin/customers', {
+      page: params?.page ?? 1,
+      limit: params?.limit ?? 10,
+      search: params?.search,
+    });
     return {
       success: true,
-      customers: result.documents.map((doc) => ({
-        _id: doc.$id,
-        firstName: doc.firstName ?? '',
-        lastName: doc.lastName ?? '',
-        profileImage: doc.profileImage,
-        phone: doc.phone ?? '',
-        email: doc.email ?? '',
-        addresses: doc.addresses ? (typeof doc.addresses === 'string' ? JSON.parse(doc.addresses) : doc.addresses) : [],
-        totalBookings: doc.totalBookings ?? 0,
-        isActive: doc.isActive !== false,
-        createdAt: doc.$createdAt,
-      })),
-      total: result.total,
-      page,
-      limit,
+      customers: (data ?? []).map(mapCustomer),
+      total: meta?.total ?? 0,
+      page: meta?.page ?? params?.page ?? 1,
+      limit: meta?.limit ?? params?.limit ?? 10,
     };
   },
 
-  /** Paginated worker list */
   getWorkers: async (params?: {
     page?: number;
     limit?: number;
     search?: string;
     status?: string;
   }) => {
-    const page = params?.page ?? 1;
-    const limit = params?.limit ?? 10;
-    const offset = (page - 1) * limit;
-
-    const queries: string[] = [
-      Query.limit(limit),
-      Query.offset(offset),
-      Query.orderDesc('$createdAt'),
-    ];
-    if (params?.status) {
-      queries.push(Query.equal('status', params.status));
-    }
-    if (params?.search) {
-      queries.push(Query.search('firstName', params.search));
-    }
-
-    const result = await databases.listDocuments(databaseId, collections.workers, queries);
+    const { data, meta } = await getData<any[]>('/users/admin/workers', {
+      page: params?.page ?? 1,
+      limit: params?.limit ?? 10,
+      search: params?.search,
+      verificationStatus: params?.status,
+    });
     return {
       success: true,
-      workers: result.documents.map((doc) => mapWorkerDoc(doc)),
-      total: result.total,
-      page,
-      limit,
+      workers: (data ?? []).map(mapWorker),
+      total: meta?.total ?? 0,
+      page: meta?.page ?? params?.page ?? 1,
+      limit: meta?.limit ?? params?.limit ?? 10,
     };
   },
 
-  /** Workers awaiting admin verification */
   getPendingWorkers: async () => {
-    const result = await databases.listDocuments(databaseId, collections.workers, [
-      Query.equal('status', 'PENDING_VERIFICATION'),
-      Query.orderDesc('$createdAt'),
-      Query.limit(100),
-    ]);
+    const { data } = await getData<any[]>('/users/admin/workers/pending');
     return {
       success: true,
-      workers: result.documents.map((doc) => mapWorkerDoc(doc)),
+      workers: (data ?? []).map(mapWorker),
     };
   },
 
-  /** Approve or reject a worker */
   verifyWorker: async (
     workerId: string,
     data: { status: string; notes?: string },
   ) => {
-    const updateData: Record<string, unknown> = {
-      status: data.status,
+    const response = await apiRequest<any>(`/users/admin/workers/${workerId}/verify`, {
+      method: 'PUT',
+      body: data,
+    });
+
+    return {
+      success: true,
+      worker: response.data ? mapWorker(response.data) : null,
     };
-    if (data.status === 'ACTIVE') {
-      updateData.cnicVerified = true;
-    }
-
-    const doc = await databases.updateDocument(
-      databaseId,
-      collections.workers,
-      workerId,
-      updateData,
-    );
-
-    // Send notification to worker
-    try {
-      await functions.createExecution(
-        fnIds.notificationSender,
-        JSON.stringify({
-          action: 'send_template',
-          recipientId: doc.userId ?? workerId,
-          template: 'worker_verification',
-          variables: { status: data.status === 'ACTIVE' ? 'approved' : 'rejected' },
-        }),
-      );
-    } catch {
-      // Non-critical
-    }
-
-    return { success: true, worker: mapWorkerDoc(doc) };
   },
 
-  /** Toggle active / suspended flag on any user */
   updateUserStatus: async (
     userId: string,
     data: { isActive: boolean; reason?: string },
   ) => {
-    // Try updating worker document first
-    try {
-      await databases.updateDocument(databaseId, collections.workers, userId, {
-        status: data.isActive ? 'ACTIVE' : 'SUSPENDED',
-      });
-    } catch {
-      // Try customer
-      try {
-        await databases.updateDocument(databaseId, collections.customers, userId, {
-          isActive: data.isActive,
-        });
-      } catch {
-        throw new Error('User not found');
-      }
-    }
+    await apiRequest(`/users/admin/users/${userId}/status`, {
+      method: 'PUT',
+      body: data,
+    });
     return { success: true };
   },
 
-  /** Aggregate stats for Workers page */
   getWorkerStats: async () => {
-    const total = await databases.listDocuments(databaseId, collections.workers, [Query.limit(1)]);
-    const active = await databases.listDocuments(databaseId, collections.workers, [
-      Query.equal('status', 'ACTIVE'), Query.limit(1),
-    ]);
-    const pending = await databases.listDocuments(databaseId, collections.workers, [
-      Query.equal('status', 'PENDING_VERIFICATION'), Query.limit(1),
-    ]);
-    const suspended = await databases.listDocuments(databaseId, collections.workers, [
-      Query.equal('status', 'SUSPENDED'), Query.limit(1),
-    ]);
-    return { total: total.total, active: active.total, pending: pending.total, suspended: suspended.total };
-  },
-
-  /** Aggregate stats for Customers page */
-  getCustomerStats: async () => {
-    const total = await databases.listDocuments(databaseId, collections.customers, [Query.limit(1)]);
-
-    // New this month
-    const now = new Date();
-    const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
-    const newThisMonth = await databases.listDocuments(databaseId, collections.customers, [
-      Query.greaterThanEqual('$createdAt', startOfMonth),
-      Query.limit(1),
-    ]);
-
-    // Total bookings across all customers
-    const allBookings = await databases.listDocuments(databaseId, collections.bookings, [
-      Query.limit(1),
-    ]);
-
-    // Active = total minus explicitly inactive
-    const inactive = await databases.listDocuments(databaseId, collections.customers, [
-      Query.equal('isActive', false),
-      Query.limit(1),
+    const [total, active, pending, suspended] = await Promise.all([
+      getData<any[]>('/users/admin/workers', { page: 1, limit: 1 }),
+      getData<any[]>('/users/admin/workers', { page: 1, limit: 1, verificationStatus: 'ACTIVE' }),
+      getData<any[]>('/users/admin/workers', { page: 1, limit: 1, verificationStatus: 'PENDING_VERIFICATION' }),
+      getData<any[]>('/users/admin/workers', { page: 1, limit: 1, verificationStatus: 'SUSPENDED' }),
     ]);
 
     return {
-      total: total.total,
-      active: total.total - inactive.total,
-      totalBookings: allBookings.total,
-      newThisMonth: newThisMonth.total,
+      total: total.meta?.total ?? 0,
+      active: active.meta?.total ?? 0,
+      pending: pending.meta?.total ?? 0,
+      suspended: suspended.meta?.total ?? 0,
+    };
+  },
+
+  getCustomerStats: async () => {
+    const [total, active, recentCustomers, bookingStats] = await Promise.all([
+      getData<any[]>('/users/admin/customers', { page: 1, limit: 1 }),
+      getData<any[]>('/users/admin/customers', { page: 1, limit: 1, status: 'active' }),
+      getData<any[]>('/users/admin/customers', { page: 1, limit: 200 }),
+      getData<any>('/bookings/admin/stats', { period: 'month' }),
+    ]);
+
+    const newThisMonth = (recentCustomers.data ?? [])
+      .map(mapCustomer)
+      .filter((customer) => new Date(customer.createdAt) >= monthStart).length;
+
+    return {
+      total: total.meta?.total ?? 0,
+      active: active.meta?.total ?? 0,
+      totalBookings: bookingStats.data?.summary?.totalBookings ?? 0,
+      newThisMonth,
     };
   },
 };

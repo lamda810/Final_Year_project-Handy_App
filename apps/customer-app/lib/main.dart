@@ -4,7 +4,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'app.dart';
 import 'core/constants/app_colors.dart';
-import 'core/services/push_notification_service.dart';
 import 'injection_container.dart';
 
 void main() async {
@@ -12,15 +11,6 @@ void main() async {
   runZonedGuarded(
     () async {
       WidgetsFlutterBinding.ensureInitialized();
-
-      // Initialize push notifications (Firebase + FCM)
-      // Wrapped in try-catch so app always starts even if Firebase fails
-      try {
-        final pushService = PushNotificationService();
-        await pushService.initialize();
-      } catch (e) {
-        debugPrint('Firebase/FCM init failed: $e');
-      }
 
       // Set preferred orientations
       await SystemChrome.setPreferredOrientations([
@@ -38,7 +28,7 @@ void main() async {
         ),
       );
 
-      // Initialize dependency injection (includes Appwrite client init)
+      // Initialize dependency injection
       await initializeDependencies();
 
       // Set custom error widget for release mode

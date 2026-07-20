@@ -65,4 +65,7 @@ abstract class BookingRemoteDataSource {
     required String serviceCategory,
     required String problemDescription,
   });
+
+  /// Upload a local image file and return its server-hosted URL.
+  Future<String> uploadImage(String filePath);
 }

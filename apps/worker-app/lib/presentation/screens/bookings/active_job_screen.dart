@@ -3,11 +3,12 @@ import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/constants/app_spacing.dart';
-import '../../../core/appwrite/appwrite_config.dart';
-import '../../../core/appwrite/realtime_manager.dart';
 import '../../../core/services/location_service.dart';
+import '../../../core/utils/string_extensions.dart';
+import '../../../core/widgets/photo_strip.dart';
 import '../../../data/models/booking_model.dart';
-import '../../../data/repositories/appwrite_booking_repository.dart';
+import '../../../domain/repositories/booking_repository.dart';
+import '../../../injection_container.dart';
 import '../../routes/app_routes.dart';
 
 class ActiveJobScreen extends StatefulWidget {
@@ -20,7 +21,7 @@ class ActiveJobScreen extends StatefulWidget {
 }
 
 class _ActiveJobScreenState extends State<ActiveJobScreen> {
-  final AppwriteBookingRepository _repository = AppwriteBookingRepository();
+  final BookingRepository _repository = sl<BookingRepository>();
   final LocationService _locationService = LocationService();
   BookingModel? _booking;
   bool _isLoading = true;
@@ -28,13 +29,13 @@ class _ActiveJobScreenState extends State<ActiveJobScreen> {
   Timer? _durationTimer;
   Duration _elapsedTime = Duration.zero;
   DateTime? _startTime;
-  RealtimeSubscriptionHandle? _bookingHandle;
+  Timer? _statusPollTimer;
 
   @override
   void initState() {
     super.initState();
     _loadBooking();
-    _subscribeToBookingUpdates();
+    _startStatusPolling();
   }
 
   @override
@@ -42,23 +43,22 @@ class _ActiveJobScreenState extends State<ActiveJobScreen> {
     _durationTimer?.cancel();
     // Don't stop location tracking here — it will be stopped when
     // the job is completed/cancelled via the LocationService.
-    _bookingHandle?.cancel();
+    _statusPollTimer?.cancel();
     super.dispose();
   }
 
-  /// Subscribe to realtime booking document changes (customer cancellation, etc.)
-  void _subscribeToBookingUpdates() {
-    _bookingHandle = RealtimeManager().subscribe(
-      channels: [
-        'tablesdb.${AppwriteConfig.databaseId}.tables.${AppwriteConfig.bookingsCollection}.rows.${widget.bookingId}',
-      ],
-      onData: (event) {
+  /// Poll the booking status so customer-side changes (e.g. cancellation)
+  /// are picked up without realtime infrastructure.
+  void _startStatusPolling() {
+    _statusPollTimer = Timer.periodic(const Duration(seconds: 10), (_) async {
+      if (!mounted || _isProcessing) return;
+      try {
+        final booking = await _repository.getBookingDetails(widget.bookingId);
         if (!mounted) return;
-        final data = event.payload;
-        final newStatus = data['status'] as String?;
 
         // If the booking was cancelled, show alert and pop
-        if (newStatus == 'CANCELLED') {
+        if (booking.isCancelled) {
+          _statusPollTimer?.cancel();
           _durationTimer?.cancel();
           _locationService.stopActiveJobTracking(resumeIdle: true);
           _repository.resetWorkerAvailability(); // Fire-and-forget
@@ -72,10 +72,11 @@ class _ActiveJobScreenState extends State<ActiveJobScreen> {
           return;
         }
 
-        // Otherwise just reload the booking data
-        _loadBooking();
-      },
-    );
+        setState(() => _booking = booking);
+      } catch (_) {
+        // Polling is best-effort; ignore transient errors
+      }
+    });
   }
 
   Future<void> _loadBooking() async {
@@ -145,25 +146,24 @@ class _ActiveJobScreenState extends State<ActiveJobScreen> {
   }
 
   Future<void> _completeJob() async {
-    final result = await showDialog<Map<String, dynamic>>(
+    final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => _CompleteJobDialog(
         estimatedPrice: _booking?.pricing.estimatedPrice ?? 0,
       ),
     );
 
-    if (result == null) return;
+    if (confirmed != true) return;
 
     setState(() {
       _isProcessing = true;
     });
 
     try {
-      await _repository.completeBooking(
-        widget.bookingId,
-        finalPrice: result['finalPrice'],
-        materialsCost: result['materialsCost'],
-      );
+      // Price was already decided at booking creation — the worker no
+      // longer enters a final amount here; the backend uses the
+      // booking's estimatedPrice when finalPrice is omitted.
+      await _repository.completeBooking(widget.bookingId);
 
       _durationTimer?.cancel();
       _locationService.stopActiveJobTracking(resumeIdle: true);
@@ -217,8 +217,11 @@ class _ActiveJobScreenState extends State<ActiveJobScreen> {
                 context,
                 AppRoutes.sos,
                 arguments: {
-                  'bookingId': booking?.bookingNumber,
+                  // Backend does Booking.findById(bookingId) — needs the
+                  // real Mongo _id, not the human-readable booking number.
+                  'bookingId': booking?.id,
                   'customerName': booking?.customer.fullName,
+                  'customerPhone': booking?.customer.callablePhone,
                 },
               );
             },
@@ -329,9 +332,7 @@ class _ActiveJobScreenState extends State<ActiveJobScreen> {
                       leading: CircleAvatar(
                         backgroundColor: AppColors.secondaryDark,
                         child: Text(
-                          booking.customer.firstName
-                              .substring(0, 1)
-                              .toUpperCase(),
+                          booking.customer.firstName.initial('C'),
                           style: const TextStyle(
                             color: AppColors.textOnPrimary,
                             fontWeight: FontWeight.bold,
@@ -339,7 +340,7 @@ class _ActiveJobScreenState extends State<ActiveJobScreen> {
                         ),
                       ),
                       title: Text(booking.customer.fullName),
-                      subtitle: Text(booking.customer.phone),
+                      subtitle: Text(booking.customer.callablePhone ?? 'No phone available'),
                       trailing: Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
@@ -347,9 +348,10 @@ class _ActiveJobScreenState extends State<ActiveJobScreen> {
                             icon: const Icon(Icons.phone),
                             color: AppColors.primary,
                             onPressed: () {
-                              launchUrl(
-                                Uri.parse('tel:${booking.customer.phone}'),
-                              );
+                              final phone = booking.customer.callablePhone;
+                              if (phone != null && phone.isNotEmpty) {
+                                launchUrl(Uri.parse('tel:$phone'));
+                              }
                             },
                           ),
                           IconButton(
@@ -360,9 +362,12 @@ class _ActiveJobScreenState extends State<ActiveJobScreen> {
                                 context,
                                 AppRoutes.chat,
                                 arguments: {
-                                  'bookingId': booking.bookingNumber,
+                                  // Chat API requires the real Mongo _id,
+                                  // not the human-readable booking number.
+                                  'bookingId': booking.id,
+                                  'bookingNumber': booking.bookingNumber,
                                   'customerName': booking.customer.fullName,
-                                  'customerPhone': booking.customer.phone,
+                                  'customerPhone': booking.customer.callablePhone,
                                 },
                               );
                             },
@@ -423,29 +428,49 @@ class _ActiveJobScreenState extends State<ActiveJobScreen> {
                   const SizedBox(height: AppSpacing.md),
 
                   // Problem Description
-                  Card(
-                    child: Padding(
-                      padding: const EdgeInsets.all(AppSpacing.md),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          const Text(
-                            'Problem Description',
-                            style: TextStyle(
-                              fontWeight: FontWeight.w600,
-                              fontSize: 16,
+                  SizedBox(
+                    width: double.infinity,
+                    child: Card(
+                      child: Padding(
+                        padding: const EdgeInsets.all(AppSpacing.md),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Text(
+                              'Problem Description',
+                              style: TextStyle(
+                                fontWeight: FontWeight.w600,
+                                fontSize: 16,
+                              ),
                             ),
-                          ),
-                          const SizedBox(height: AppSpacing.sm),
-                          Text(
-                            booking.problemDescription,
-                            style: TextStyle(
-                              color: Theme.of(
-                                context,
-                              ).colorScheme.onSurface.withValues(alpha: 0.7),
+                            const SizedBox(height: AppSpacing.sm),
+                            Text(
+                              booking.problemDescription,
+                              style: TextStyle(
+                                color: Theme.of(
+                                  context,
+                                ).colorScheme.onSurface.withValues(alpha: 0.7),
+                              ),
                             ),
-                          ),
-                        ],
+                            if (booking.beforeImages != null &&
+                                booking.beforeImages!.isNotEmpty) ...[
+                              const SizedBox(height: AppSpacing.md),
+                              Text(
+                                'Photos from Customer',
+                                style: TextStyle(
+                                  fontWeight: FontWeight.w600,
+                                  fontSize: 13,
+                                  color: Theme.of(context)
+                                      .colorScheme
+                                      .onSurface
+                                      .withValues(alpha: 0.7),
+                                ),
+                              ),
+                              const SizedBox(height: AppSpacing.sm),
+                              PhotoStrip(imageUrls: booking.beforeImages!),
+                            ],
+                          ],
+                        ),
                       ),
                     ),
                   ),
@@ -516,32 +541,10 @@ class _ActiveJobScreenState extends State<ActiveJobScreen> {
   }
 }
 
-class _CompleteJobDialog extends StatefulWidget {
+class _CompleteJobDialog extends StatelessWidget {
   final double estimatedPrice;
 
   const _CompleteJobDialog({required this.estimatedPrice});
-
-  @override
-  State<_CompleteJobDialog> createState() => _CompleteJobDialogState();
-}
-
-class _CompleteJobDialogState extends State<_CompleteJobDialog> {
-  final _finalPriceController = TextEditingController();
-  final _materialsController = TextEditingController();
-
-  @override
-  void initState() {
-    super.initState();
-    _finalPriceController.text = widget.estimatedPrice.toStringAsFixed(0);
-    _materialsController.text = '0';
-  }
-
-  @override
-  void dispose() {
-    _finalPriceController.dispose();
-    _materialsController.dispose();
-    super.dispose();
-  }
 
   @override
   Widget build(BuildContext context) {
@@ -549,54 +552,30 @@ class _CompleteJobDialogState extends State<_CompleteJobDialog> {
       title: const Text('Complete Job'),
       content: Column(
         mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            'Enter the final pricing for this job:',
+            'Mark this job as completed?',
             style: TextStyle(
               color: Theme.of(
                 context,
               ).colorScheme.onSurface.withValues(alpha: 0.7),
             ),
           ),
-          const SizedBox(height: AppSpacing.lg),
-          TextField(
-            controller: _finalPriceController,
-            keyboardType: TextInputType.number,
-            decoration: const InputDecoration(
-              labelText: 'Final Price (Rs.)',
-              prefixText: 'Rs. ',
-              border: OutlineInputBorder(),
-            ),
-          ),
           const SizedBox(height: AppSpacing.md),
-          TextField(
-            controller: _materialsController,
-            keyboardType: TextInputType.number,
-            decoration: const InputDecoration(
-              labelText: 'Materials Cost (Rs.)',
-              prefixText: 'Rs. ',
-              border: OutlineInputBorder(),
-              helperText: 'Cost of any materials used',
-            ),
+          Text(
+            'Amount: Rs. ${estimatedPrice.toStringAsFixed(0)}',
+            style: const TextStyle(fontWeight: FontWeight.w600),
           ),
         ],
       ),
       actions: [
         TextButton(
-          onPressed: () => Navigator.pop(context),
+          onPressed: () => Navigator.pop(context, false),
           child: const Text('Cancel'),
         ),
         ElevatedButton(
-          onPressed: () {
-            final finalPrice = double.tryParse(_finalPriceController.text) ?? 0;
-            final materialsCost =
-                double.tryParse(_materialsController.text) ?? 0;
-
-            Navigator.pop(context, {
-              'finalPrice': finalPrice,
-              'materialsCost': materialsCost,
-            });
-          },
+          onPressed: () => Navigator.pop(context, true),
           child: const Text('Complete'),
         ),
       ],

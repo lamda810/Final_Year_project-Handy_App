@@ -1,6 +1,6 @@
 name: customer_app
 description: "Handy Go - Customer Mobile Application for home services booking"
-publish_to: 'none'
+publish_to: "none"
 
 version: 1.0.0+1
 
@@ -47,15 +47,12 @@ dependencies:
   connectivity_plus: ^5.0.2
   get_it: ^7.6.4
 
-  # Appwrite Backend (Cloud)
-  appwrite: 21.4.0
-
   # REST API Client
   dio: ^5.4.0
   pretty_dio_logger: ^1.3.1
 
-  # Voice Input - TODO: Add later after fixing Kotlin cross-drive issue
-  # speech_to_text: ^7.3.0
+  # Voice Input
+  speech_to_text: ^7.3.0
 
 dependency_overrides:
   flutter_web_auth_2: ^5.0.1

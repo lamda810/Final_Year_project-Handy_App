@@ -65,6 +65,7 @@ export interface IWorker extends Document {
   firstName: string;
   lastName: string;
   profileImage?: string;
+  contactPhone?: string;
   cnic: string;
   cnicVerified: boolean;
   cnicImages: {
@@ -253,6 +254,11 @@ const workerSchema = new Schema<IWorker, IWorkerModel>(
     profileImage: {
       type: String,
       trim: true,
+    },
+    contactPhone: {
+      type: String,
+      trim: true,
+      match: [/^(\+92|0)?3[0-9]{9}$/, 'Contact number must be a valid Pakistani mobile number'],
     },
     cnic: {
       type: String,

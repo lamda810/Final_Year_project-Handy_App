@@ -1,7 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
-import '../../../core/appwrite/appwrite_config.dart';
-import '../../../core/appwrite/realtime_manager.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/constants/app_spacing.dart';
 import '../../../core/routes/app_routes.dart';
@@ -21,7 +19,6 @@ class NotificationsScreen extends StatefulWidget {
 
 class _NotificationsScreenState extends State<NotificationsScreen> {
   final ScrollController _scrollController = ScrollController();
-  RealtimeSubscriptionHandle? _notificationsHandle;
 
   @override
   void initState() {
@@ -33,31 +30,12 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
 
     // Add scroll listener for pagination
     _scrollController.addListener(_onScroll);
-
-    // Subscribe to realtime notification changes
-    _subscribeToNotifications();
   }
 
   @override
   void dispose() {
-    _notificationsHandle?.cancel();
     _scrollController.dispose();
     super.dispose();
-  }
-
-  /// Subscribe to realtime notifications so new ones appear instantly.
-  void _subscribeToNotifications() {
-    _notificationsHandle = RealtimeManager().subscribe(
-      channels: [
-        'tablesdb.${AppwriteConfig.databaseId}.tables.${AppwriteConfig.notificationsCollection}.rows',
-      ],
-      onData: (event) {
-        if (!mounted) return;
-        context.read<NotificationBloc>().add(
-          const LoadNotificationsRequested(refresh: true),
-        );
-      },
-    );
   }
 
   void _onScroll() {

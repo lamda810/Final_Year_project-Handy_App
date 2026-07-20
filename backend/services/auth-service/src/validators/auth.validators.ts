@@ -92,13 +92,19 @@ export const registerWorkerSchema = Joi.object({
 
 /**
  * Login validation schema
+ * Accepts either phone or email as the identifier.
  */
 export const loginSchema = Joi.object({
-  phone: phoneNumberSchema.required(),
+  phone: phoneNumberSchema.optional(),
+  email: emailSchema.optional(),
   password: Joi.string().required().messages({
     'any.required': 'Password is required',
   }),
-});
+})
+  .or('phone', 'email')
+  .messages({
+    'object.missing': 'Phone or email is required',
+  });
 
 /**
  * Refresh token validation schema

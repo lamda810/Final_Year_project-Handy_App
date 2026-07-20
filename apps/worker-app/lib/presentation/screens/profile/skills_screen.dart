@@ -7,7 +7,8 @@ import '../../../core/constants/app_colors.dart';
 import '../../../core/constants/app_spacing.dart';
 import '../../../core/utils/validators.dart';
 import '../../../data/models/worker_model.dart';
-import '../../../data/repositories/appwrite_worker_repository.dart';
+import '../../../domain/repositories/worker_repository.dart';
+import '../../../injection_container.dart';
 
 class SkillsScreen extends StatefulWidget {
   const SkillsScreen({super.key});
@@ -17,7 +18,7 @@ class SkillsScreen extends StatefulWidget {
 }
 
 class _SkillsScreenState extends State<SkillsScreen> {
-  final AppwriteWorkerRepository _repository = AppwriteWorkerRepository();
+  final WorkerRepository _repository = sl<WorkerRepository>();
   bool _isLoading = true;
   bool _isSaving = false;
 

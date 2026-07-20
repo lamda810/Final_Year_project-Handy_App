@@ -58,7 +58,7 @@ class AppRoutes {
         final args = settings.arguments as Map<String, dynamic>?;
         return MaterialPageRoute(
           builder: (_) => OtpVerificationScreen(
-            email: args?['email'] ?? '',
+            phone: args?['phone'] ?? '',
             purpose: args?['purpose'] ?? 'REGISTRATION',
           ),
         );
@@ -68,7 +68,7 @@ class AppRoutes {
         return MaterialPageRoute(
           builder: (_) => RegistrationScreen(
             tempToken: args?['tempToken'] ?? '',
-            email: args?['email'] ?? '',
+            phone: args?['phone'] ?? '',
           ),
         );
 
@@ -83,7 +83,7 @@ class AppRoutes {
         return MaterialPageRoute(
           builder: (_) => ResetPasswordScreen(
             tempToken: args?['tempToken'] ?? '',
-            email: args?['email'] ?? '',
+            phone: args?['phone'] ?? '',
           ),
         );
 
@@ -125,6 +125,7 @@ class AppRoutes {
         return MaterialPageRoute(
           builder: (_) => ChatScreen(
             bookingId: args?['bookingId'] ?? '',
+            bookingNumber: args?['bookingNumber'],
             customerName: args?['customerName'] ?? '',
             customerPhone: args?['customerPhone'] ?? '',
           ),
@@ -136,6 +137,7 @@ class AppRoutes {
           builder: (_) => SOSScreen(
             bookingId: args?['bookingId'],
             customerName: args?['customerName'],
+            customerPhone: args?['customerPhone'],
           ),
         );
 

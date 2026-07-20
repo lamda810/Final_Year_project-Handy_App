@@ -1,4 +1,5 @@
 import mongoose from 'mongoose';
+import { randomBytes } from 'crypto';
 import { Booking, Customer, Worker, Review, asyncHandler, successResponse, errorResponse, notFoundResponse, paginatedResponse, HTTP_STATUS, DEFAULTS, } from '@handy-go/shared';
 import { config } from '../config/index.js';
 import matchingService from '../services/matching.service.js';
@@ -45,10 +46,21 @@ export const createBooking = asyncHandler(async (req, res) => {
         isUrgent,
         problemComplexity: problemAnalysis.urgencyLevel,
     });
-    // Generate booking number
-    const today = new Date().toISOString().slice(0, 10).replace(/-/g, '');
-    const randomPart = Math.random().toString(36).substring(2, 7).toUpperCase();
-    const bookingNumber = `HG-${today}-${randomPart}`;
+    // Generate cryptographically secure booking number with collision retry
+    const generateBookingNumber = async (maxRetries = 5) => {
+        const today = new Date().toISOString().slice(0, 10).replace(/-/g, '');
+        for (let attempt = 0; attempt < maxRetries; attempt++) {
+            const randomPart = randomBytes(4).toString('hex').substring(0, 5).toUpperCase();
+            const candidate = `HG-${today}-${randomPart}`;
+            const exists = await Booking.findOne({ bookingNumber: candidate }).lean();
+            if (!exists)
+                return candidate;
+        }
+        // Fallback: append timestamp millis for guaranteed uniqueness
+        const fallback = randomBytes(6).toString('hex').toUpperCase();
+        return `HG-${today}-${fallback}`;
+    };
+    const bookingNumber = await generateBookingNumber();
     // Create booking
     const booking = new Booking({
         bookingNumber,

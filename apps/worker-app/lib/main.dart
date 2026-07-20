@@ -5,12 +5,8 @@ import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'core/constants/app_colors.dart';
+import 'core/navigation/app_navigator.dart';
 import 'core/theme/app_theme.dart';
-import 'core/appwrite/appwrite_client.dart';
-import 'core/services/push_notification_service.dart';
-import 'data/repositories/appwrite_auth_repository.dart';
-import 'data/repositories/appwrite_worker_repository.dart';
-import 'data/repositories/appwrite_booking_repository.dart';
 import 'domain/repositories/auth_repository.dart';
 import 'domain/repositories/booking_repository.dart';
 import 'domain/repositories/worker_repository.dart';
@@ -23,18 +19,6 @@ import 'presentation/routes/app_routes.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-
-  // Initialize push notifications (Firebase + FCM)
-  // Wrapped in try-catch so app always starts even if Firebase fails
-  try {
-    final pushService = PushNotificationService();
-    await pushService.initialize();
-  } catch (e) {
-    debugPrint('Firebase/FCM init failed: $e');
-  }
-
-  // Initialize Appwrite client
-  AppwriteClient.initialize();
 
   // Register all dependencies via get_it
   initDependencies();
@@ -123,39 +107,18 @@ class HandyGoWorkerApp extends StatelessWidget {
         RepositoryProvider<BookingRepository>(
           create: (_) => sl<BookingRepository>(),
         ),
-        // Keep concrete types available for backward compat
-        RepositoryProvider<AppwriteAuthRepository>(
-          create: (_) => sl<AppwriteAuthRepository>(),
-        ),
-        RepositoryProvider<AppwriteWorkerRepository>(
-          create: (_) => sl<AppwriteWorkerRepository>(),
-        ),
-        RepositoryProvider<AppwriteBookingRepository>(
-          create: (_) => sl<AppwriteBookingRepository>(),
-        ),
       ],
       child: MultiBlocProvider(
         providers: [
           BlocProvider<AuthBloc>(
             create: (context) => AuthBloc(
-              authRepository: sl<AppwriteAuthRepository>(),
-              workerRepository: sl<AppwriteWorkerRepository>(),
+              authRepository: sl<AuthRepository>(),
+              workerRepository: sl<WorkerRepository>(),
             )..add(CheckAuthStatus()),
           ),
         ],
         child: BlocListener<AuthBloc, AuthState>(
-          listener: (context, state) {
-            final pushService = PushNotificationService();
-            if (state is Authenticated) {
-              // Register FCM token after authentication
-              pushService.requestPermission().then((_) {
-                pushService.getAndRegisterToken();
-              });
-            } else if (state is Unauthenticated) {
-              // Clean up FCM token on logout
-              pushService.unregisterToken();
-            }
-          },
+          listener: (_, __) {},
           child: ValueListenableBuilder<Locale>(
             valueListenable: HandyGoWorkerApp.localeNotifier,
             builder: (context, locale, _) {
@@ -163,6 +126,7 @@ class HandyGoWorkerApp extends StatelessWidget {
                 valueListenable: HandyGoWorkerApp.themeModeNotifier,
                 builder: (context, themeMode, _) {
                   return MaterialApp(
+                    navigatorKey: appNavigatorKey,
                     title: 'Handy Go - Worker',
                     debugShowCheckedModeBanner: false,
                     theme: AppTheme.lightTheme,

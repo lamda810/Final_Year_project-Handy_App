@@ -16,16 +16,16 @@ class RestAuthRepository implements AuthRepository {
        _secureStorage = secureStorage;
 
   @override
-  Future<Map<String, dynamic>> sendOTP(String email, String purpose) async {
+  Future<Map<String, dynamic>> sendOTP(String phone, String purpose) async {
     try {
       final response = await _dio.post(
         ApiEndpoints.sendOtp,
         data: {
-          'email': email,
+          'phone': phone,
           'purpose': purpose,
         },
       );
-      return response.data;
+      return response.data['data'] ?? response.data;
     } catch (e) {
       rethrow;
     }
@@ -33,7 +33,7 @@ class RestAuthRepository implements AuthRepository {
 
   @override
   Future<Map<String, dynamic>> verifyOTP(
-    String email,
+    String phone,
     String code,
     String purpose,
   ) async {
@@ -41,12 +41,12 @@ class RestAuthRepository implements AuthRepository {
       final response = await _dio.post(
         ApiEndpoints.verifyOtp,
         data: {
-          'email': email,
+          'phone': phone,
           'code': code,
           'purpose': purpose,
         },
       );
-      return response.data;
+      return response.data['data'] ?? response.data;
     } catch (e) {
       rethrow;
     }
@@ -75,8 +75,8 @@ class RestAuthRepository implements AuthRepository {
           'skills': skills.map((s) => s.toJson()).toList(),
         },
       );
-      
-      final data = response.data;
+
+      final data = response.data['data'] ?? response.data;
       if (data['accessToken'] != null) {
         await _saveTokens(data['accessToken'], data['refreshToken']);
       }
@@ -96,7 +96,7 @@ class RestAuthRepository implements AuthRepository {
           'password': password,
         },
       );
-      final data = response.data;
+      final data = response.data['data'] ?? response.data;
       if (data['accessToken'] != null) {
         await _saveTokens(data['accessToken'], data['refreshToken']);
       }
@@ -107,8 +107,8 @@ class RestAuthRepository implements AuthRepository {
   }
 
   @override
-  Future<void> forgotPassword(String email) async {
-    await _dio.post(ApiEndpoints.forgotPassword, data: {'email': email});
+  Future<void> forgotPassword(String phone) async {
+    await _dio.post(ApiEndpoints.forgotPassword, data: {'phone': phone});
   }
 
   @override
@@ -117,7 +117,7 @@ class RestAuthRepository implements AuthRepository {
       ApiEndpoints.resetPassword,
       data: {
         'tempToken': tempToken,
-        'password': newPassword,
+        'newPassword': newPassword,
       },
     );
   }

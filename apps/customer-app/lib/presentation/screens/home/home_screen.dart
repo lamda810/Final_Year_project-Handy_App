@@ -1,8 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
-import '../../../core/appwrite/appwrite_config.dart';
-import '../../../core/appwrite/appwrite_client.dart';
-import '../../../core/appwrite/realtime_manager.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/constants/app_strings.dart';
 import '../../../core/constants/app_spacing.dart';
@@ -27,8 +24,6 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _HomeScreenState extends State<HomeScreen> {
-  RealtimeSubscriptionHandle? _bookingsHandle;
-
   final List<ServiceCategory> _categories = [
     ServiceCategory(
       name: AppStrings.plumbing,
@@ -91,30 +86,19 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   void initState() {
     super.initState();
-    // Load recent bookings
+    _loadRecentBookings();
+  }
+
+  void _loadRecentBookings() {
     context.read<BookingBloc>().add(const LoadBookingsRequested(status: 'all'));
-    // Subscribe to realtime booking updates so status changes appear immediately
-    _subscribeToBookingUpdates();
   }
 
-  @override
-  void dispose() {
-    _bookingsHandle?.cancel();
-    super.dispose();
-  }
-
-  void _subscribeToBookingUpdates() {
-    _bookingsHandle = RealtimeManager().subscribe(
-      channels: [
-        'tablesdb.${AppwriteConfig.databaseId}.tables.${AppwriteConfig.bookingsCollection}.rows',
-      ],
-      onData: (_) {
-        if (mounted) {
-          context.read<BookingBloc>().add(
-            const LoadBookingsRequested(status: 'all'),
-          );
-        }
-      },
+  Future<void> _onRefresh() async {
+    _loadRecentBookings();
+    // Wait for this refresh's own result so the pull-to-refresh indicator
+    // stays visible until the recent-bookings section actually updates.
+    await context.read<BookingBloc>().stream.firstWhere(
+      (state) => state is BookingsLoaded || state is BookingError,
     );
   }
 
@@ -122,8 +106,10 @@ class _HomeScreenState extends State<HomeScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       body: SafeArea(
-        child: CustomScrollView(
-          slivers: [
+        child: RefreshIndicator(
+          onRefresh: _onRefresh,
+          child: CustomScrollView(
+            slivers: [
             // App bar with location and notifications
             SliverToBoxAdapter(child: _buildAppBar()),
 
@@ -176,13 +162,10 @@ class _HomeScreenState extends State<HomeScreen> {
 
             // Promotional banners
             SliverToBoxAdapter(child: _buildPromoBanner()),
-
-            // Appwrite ping test button
-            SliverToBoxAdapter(child: _buildPingButton()),
-
             // Bottom padding
             const SliverToBoxAdapter(child: SizedBox(height: AppSpacing.xl)),
-          ],
+            ],
+          ),
         ),
       ),
     );
@@ -830,47 +813,6 @@ class _HomeScreenState extends State<HomeScreen> {
             ),
           ),
         ],
-      ),
-    );
-  }
-
-  Widget _buildPingButton() {
-    return Padding(
-      padding: const EdgeInsets.symmetric(
-        horizontal: AppSpacing.md,
-        vertical: AppSpacing.sm,
-      ),
-      child: ElevatedButton.icon(
-        onPressed: () async {
-          try {
-            final result = await AppwriteClient.client.ping();
-            if (!mounted) return;
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(
-                content: Text('Pong! $result'),
-                backgroundColor: AppColors.success,
-              ),
-            );
-          } catch (e) {
-            if (!mounted) return;
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(
-                content: Text('Ping failed: $e'),
-                backgroundColor: AppColors.error,
-              ),
-            );
-          }
-        },
-        icon: const Icon(Icons.wifi_tethering),
-        label: const Text('Send a ping'),
-        style: ElevatedButton.styleFrom(
-          backgroundColor: AppColors.primary,
-          foregroundColor: AppColors.textOnPrimary,
-          minimumSize: const Size(double.infinity, 48),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
-          ),
-        ),
       ),
     );
   }

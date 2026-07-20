@@ -7,6 +7,7 @@ export interface WorkerMatchCriteria {
     scheduledDateTime: Date;
     isUrgent: boolean;
     problemComplexity?: 'LOW' | 'MEDIUM' | 'HIGH';
+    urgencyLevel?: 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL_SOS';
 }
 export interface MatchedWorker {
     workerId: string;

@@ -15,6 +15,16 @@ import notificationService from '../services/notification.service.js';
 import pricingService from '../services/pricing.service.js';
 import matchingService from '../services/matching.service.js';
 
+// 'contactPhone' is the optional alternate number set on the Customer
+// profile; nested-populating 'user' with 'phone' provides the fallback
+// login phone for the worker's "call customer" button when no
+// contactPhone is set.
+const customerPopulateWithPhone = {
+  path: 'customer',
+  select: 'user firstName lastName contactPhone',
+  populate: { path: 'user', select: 'phone' },
+};
+
 /**
  * Get available bookings for worker
  * GET /api/bookings/worker/available
@@ -36,7 +46,7 @@ export const getAvailableBookings = asyncHandler(async (req: Request, res: Respo
     worker: worker._id,
     status: 'PENDING',
   })
-    .populate('customer', 'firstName lastName profileImage')
+    .populate('customer', 'firstName lastName profileImage contactPhone')
     .sort({ createdAt: -1 });
 
   return successResponse(res, bookings, 'Available bookings retrieved');
@@ -66,7 +76,7 @@ export const getWorkerBookings = asyncHandler(async (req: Request, res: Response
 
   const [bookings, total] = await Promise.all([
     Booking.find(filter)
-      .populate('customer', 'firstName lastName profileImage addresses')
+      .populate('customer', 'firstName lastName profileImage addresses contactPhone')
       .sort({ createdAt: -1 })
       .skip(skip)
       .limit(limitNum),
@@ -94,7 +104,7 @@ export const acceptBooking = asyncHandler(async (req: Request, res: Response) =>
     _id: bookingId,
     worker: worker._id,
     status: 'PENDING',
-  }).populate('customer', 'user firstName lastName');
+  }).populate(customerPopulateWithPhone);
 
   if (!booking) {
     return notFoundResponse(res, 'Booking not found or not assigned to you');
@@ -145,7 +155,7 @@ export const rejectBooking = asyncHandler(async (req: Request, res: Response) =>
     _id: bookingId,
     worker: worker._id,
     status: 'PENDING',
-  }).populate('customer', 'user firstName lastName');
+  }).populate(customerPopulateWithPhone);
 
   if (!booking) {
     return notFoundResponse(res, 'Booking not found or not assigned to you');
@@ -211,7 +221,7 @@ export const startJob = asyncHandler(async (req: Request, res: Response) => {
     _id: bookingId,
     worker: worker._id,
     status: 'ACCEPTED',
-  }).populate('customer', 'user');
+  }).populate(customerPopulateWithPhone);
 
   if (!booking) {
     return notFoundResponse(res, 'Booking not found or not in accepted status');
@@ -263,15 +273,20 @@ export const completeJob = asyncHandler(async (req: Request, res: Response) => {
     _id: bookingId,
     worker: worker._id,
     status: 'IN_PROGRESS',
-  }).populate('customer', 'user');
+  }).populate(customerPopulateWithPhone);
 
   if (!booking) {
     return notFoundResponse(res, 'Booking not found or not in progress');
   }
 
+  // The price is decided at booking creation (estimatedPrice) and the
+  // worker no longer re-enters it on completion — only fall back to a
+  // client-sent finalPrice if one is explicitly provided.
+  const laborCost = typeof finalPrice === 'number' ? finalPrice : (booking.pricing.estimatedPrice || 0);
+
   // Calculate pricing
   const pricing = pricingService.calculatePricing({
-    laborCost: finalPrice,
+    laborCost,
     materialsCost: materialsCost || 0,
   });
 

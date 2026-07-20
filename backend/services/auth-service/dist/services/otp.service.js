@@ -18,11 +18,12 @@ const twilioClient = (() => {
         return null;
     }
 })();
+import { randomInt } from 'crypto';
 /**
- * Generate 6-digit OTP
+ * Generate 6-digit OTP using cryptographically secure random
  */
 export const generateOTP = () => {
-    return Math.floor(100000 + Math.random() * 900000).toString();
+    return randomInt(100000, 999999).toString();
 };
 /**
  * Send SMS via Twilio
@@ -30,8 +31,13 @@ export const generateOTP = () => {
 export const sendSMS = async (phone, message) => {
     try {
         if (!twilioClient) {
-            // In development, log the message instead of sending
-            logger.info(`[DEV MODE] SMS to ${phone}: ${message}`);
+            // SECURITY: In production, refuse to proceed without a real SMS provider.
+            // In development, redact the OTP body but confirm delivery was simulated.
+            if (config.nodeEnv === 'production') {
+                logger.error('Twilio not configured in production — cannot send SMS');
+                return false;
+            }
+            logger.info(`[DEV MODE] SMS simulated to ${phone} (OTP redacted)`);
             return true;
         }
         await twilioClient.messages.create({
@@ -61,9 +67,11 @@ export const createAndSendOTP = async (phone, purpose) => {
         if (!smsSent) {
             return { success: false, error: 'Failed to send OTP SMS' };
         }
-        // In development, also log the OTP for testing
+        // In development, log the OTP for testing (NEVER in production)
         if (config.nodeEnv === 'development') {
-            logger.info(`[DEV] OTP for ${phone}: ${otpRecord.code}`);
+            // SECURITY: In production, OTPs must NEVER appear in logs.
+            // This logger.debug call is stripped when NODE_ENV !== 'development'.
+            logger.debug(`[DEV] OTP for ${phone}: ${otpRecord.code}`);
         }
         return { success: true, otpId: otpRecord._id.toString() };
     }

@@ -13,7 +13,7 @@ abstract class WorkerRepository {
     String? firstName,
     String? lastName,
     String? email,
-    String? phone,
+    String? contactPhone,
     String? profileImage,
     List<SkillModel>? skills,
     double? serviceRadius,

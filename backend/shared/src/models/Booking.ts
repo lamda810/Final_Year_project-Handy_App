@@ -314,7 +314,12 @@ bookingSchema.index({ worker: 1, createdAt: -1 });
 bookingSchema.index({ status: 1 });
 bookingSchema.index({ serviceCategory: 1, status: 1 });
 bookingSchema.index({ scheduledDateTime: 1 });
-bookingSchema.index({ 'address.coordinates': '2dsphere' });
+// Note: no 2dsphere index on address.coordinates — that field is a plain
+// { lat, lng } object (not GeoJSON), and nothing in the codebase ever
+// geo-queries a booking's own address. A 2dsphere index here can't extract
+// valid geo keys from this shape and makes every insert fail once MongoDB
+// actually enforces it. Geospatial matching happens against
+// Worker.currentLocation (real GeoJSON Point) instead.
 
 /**
  * Pre-save hook to generate booking number and update timeline
@@ -331,13 +336,10 @@ bookingSchema.pre('save', async function (next) {
     });
   }
 
-  // Add timeline entry on status change
-  if (this.isModified('status') && !this.isNew) {
-    this.timeline.push({
-      status: this.status,
-      timestamp: new Date(),
-    });
-  }
+  // Note: every controller that changes `status` already pushes its own
+  // descriptive timeline entry (with a note) alongside the assignment, so
+  // this hook must not also push one — that produced a duplicate, note-less
+  // entry for every single status transition.
 
   next();
 });

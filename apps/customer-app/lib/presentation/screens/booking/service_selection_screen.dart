@@ -1,7 +1,8 @@
-import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:permission_handler/permission_handler.dart';
+import 'package:speech_to_text/speech_to_text.dart';
 import 'dart:io';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/constants/app_spacing.dart';
@@ -26,11 +27,13 @@ class _ServiceSelectionScreenState extends State<ServiceSelectionScreen> {
   final List<String> _selectedServices = [];
   final _imagePicker = ImagePicker();
 
-  // Voice input placeholder (TODO: Integrate speech_to_text)
-  final bool _isListening = false;
-
-  // Debounce timer for AI analysis
-  Timer? _debounceTimer;
+  // Voice input
+  final SpeechToText _speech = SpeechToText();
+  bool _speechAvailable = false;
+  bool _isListening = false;
+  // Text already in the field before this listening session started, so
+  // live partial results can be appended without wiping prior typing.
+  String _textBeforeListening = '';
 
   String get _categoryName {
     switch (widget.category) {
@@ -107,27 +110,85 @@ class _ServiceSelectionScreenState extends State<ServiceSelectionScreen> {
   @override
   void initState() {
     super.initState();
-    // Voice input initialization would go here
+    _initSpeech();
   }
 
-  void _toggleListening() {
-    // TODO: Integrate speech_to_text package for voice input.
-    //  1. Add speech_to_text to pubspec.yaml
-    //  2. Request microphone permission via permission_handler
-    //  3. Start SpeechToText.listen() and stream results into _problemController
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text(
-          'Voice input is not available yet. Please type your problem.',
+  Future<void> _initSpeech() async {
+    final available = await _speech.initialize(
+      onError: (error) {
+        if (!mounted) return;
+        setState(() => _isListening = false);
+      },
+      onStatus: (status) {
+        if (!mounted) return;
+        if (status == 'done' || status == 'notListening') {
+          setState(() => _isListening = false);
+        }
+      },
+    );
+    if (mounted) {
+      setState(() => _speechAvailable = available);
+    }
+  }
+
+  Future<void> _toggleListening() async {
+    if (_isListening) {
+      await _speech.stop();
+      setState(() => _isListening = false);
+      return;
+    }
+
+    if (!_speechAvailable) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Voice input is not available on this device.',
+          ),
+          backgroundColor: AppColors.info,
         ),
-        backgroundColor: AppColors.info,
+      );
+      return;
+    }
+
+    final micStatus = await Permission.microphone.request();
+    if (!micStatus.isGranted) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Microphone permission is required for voice input.'),
+          backgroundColor: AppColors.error,
+        ),
+      );
+      return;
+    }
+
+    _textBeforeListening = _problemController.text;
+    setState(() => _isListening = true);
+
+    await _speech.listen(
+      onResult: (result) {
+        final separator = _textBeforeListening.isEmpty ? '' : ' ';
+        final combined = '$_textBeforeListening$separator${result.recognizedWords}';
+        _problemController.value = TextEditingValue(
+          text: combined,
+          selection: TextSelection.collapsed(offset: combined.length),
+        );
+        setState(() {});
+      },
+      listenOptions: SpeechListenOptions(
+        listenMode: ListenMode.dictation,
+        listenFor: const Duration(seconds: 30),
+        pauseFor: const Duration(seconds: 4),
+        // No localeId override — the UI promises "English or Urdu", so
+        // use whatever the device's own speech-recognition locale is
+        // rather than forcing English.
       ),
     );
   }
 
   @override
   void dispose() {
-    _debounceTimer?.cancel();
+    _speech.stop();
     _problemController.dispose();
     super.dispose();
   }
@@ -144,9 +205,28 @@ class _ServiceSelectionScreenState extends State<ServiceSelectionScreen> {
   }
 
   void _continueToLocation() {
-    if (_problemController.text.isEmpty) {
+    final problemDescription = _problemController.text.trim();
+
+    // Must match the backend's createBookingSchema (min 10, max 1000 chars)
+    // so we never let the user reach the final confirm step with a
+    // description the server will reject.
+    if (problemDescription.length < 10) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please describe your problem')),
+        SnackBar(
+          content: Text(
+            problemDescription.isEmpty
+                ? 'Please describe your problem'
+                : 'Please describe your problem in at least 10 characters',
+          ),
+        ),
+      );
+      return;
+    }
+    if (problemDescription.length > 1000) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Problem description must be under 1000 characters'),
+        ),
       );
       return;
     }
@@ -158,7 +238,7 @@ class _ServiceSelectionScreenState extends State<ServiceSelectionScreen> {
       AppRoutes.locationSelection,
       arguments: {
         'category': widget.category,
-        'problemDescription': _problemController.text,
+        'problemDescription': problemDescription,
         'selectedServices': _selectedServices,
         'images': imagePaths,
       },
@@ -438,15 +518,24 @@ class _ServiceSelectionScreenState extends State<ServiceSelectionScreen> {
                         : null,
                   ),
                   onChanged: (value) {
-                    setState(() {}); // Refresh for clear button
-                    if (value.length > 20) {
-                      _debounceTimer?.cancel();
-                      _debounceTimer = Timer(
-                        const Duration(milliseconds: 800),
-                        _analyzeProblem,
-                      );
-                    }
+                    setState(() {}); // Refresh for clear button and analyze button
                   },
+                ),
+              ),
+
+              // Explicit trigger for the AI analysis — deliberately not
+              // fired from onChanged/debounce, since that call now hits a
+              // real (paid) OpenAI API and would fire repeatedly while the
+              // user is still typing.
+              const SizedBox(height: AppSpacing.sm),
+              Align(
+                alignment: Alignment.centerRight,
+                child: TextButton.icon(
+                  onPressed: _problemController.text.trim().length >= 10
+                      ? _analyzeProblem
+                      : null,
+                  icon: const Icon(Icons.auto_awesome, size: 18),
+                  label: const Text('Detect Service (AI)'),
                 ),
               ),
 

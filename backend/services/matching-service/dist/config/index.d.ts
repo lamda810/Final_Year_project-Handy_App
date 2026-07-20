@@ -2,8 +2,11 @@ export declare const config: {
     nodeEnv: string;
     port: number;
     mongodbUri: string;
-    jwtSecret: string;
     corsOrigin: string;
+    jwt: {
+        secret: string;
+    };
+    serviceKey: string;
     matching: {
         weights: {
             distance: number;

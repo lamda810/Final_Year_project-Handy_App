@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { authenticate, authorize } from '../middleware/auth.middleware.js';
+import { authenticate, authorize } from '@handy-go/shared';
 import * as customerController from '../controllers/customer.controller.js';
 import { validate } from '@handy-go/shared';
 import { updateCustomerProfileSchema, addAddressSchema, updateAddressSchema, } from '../validators/user.validators.js';
