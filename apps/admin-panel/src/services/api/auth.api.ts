@@ -5,7 +5,11 @@ import { apiRequest } from './client';
 import { useAuthStore } from '../../store/authStore';
 
 export const authApi = {
-  login: async (phone: string, password: string) => {
+  // `identifier` is whatever the user typed — either a phone number or an
+  // email — matching the backend's login endpoint, which accepts either.
+  login: async (identifier: string, password: string) => {
+    const isEmail = identifier.includes('@');
+
     const response = await apiRequest<{
       user: {
         id: string;
@@ -20,7 +24,9 @@ export const authApi = {
     }>('/auth/login', {
       method: 'POST',
       auth: false,
-      body: { phone, password },
+      body: isEmail
+        ? { email: identifier, password }
+        : { phone: identifier, password },
     });
 
     const payload = response.data;
@@ -34,7 +40,7 @@ export const authApi = {
 
     const userData = {
       _id: payload.user.id,
-      phone: payload.user.phone || phone,
+      phone: payload.user.phone || identifier,
       email: payload.user.email,
       role: payload.user.role,
       isVerified: payload.user.isVerified,

@@ -15,7 +15,7 @@ import {
 import {
   Visibility,
   VisibilityOff,
-  Phone as PhoneIcon,
+  Person as PersonIcon,
   Lock as LockIcon,
 } from '@mui/icons-material';
 import { useAuthStore } from '../store/authStore';
@@ -25,7 +25,7 @@ export default function LoginPage() {
   const navigate = useNavigate();
   const { setAuth } = useAuthStore();
 
-  const [phone, setPhone] = useState('');
+  const [identifier, setIdentifier] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -37,7 +37,7 @@ export default function LoginPage() {
     setLoading(true);
 
     try {
-      const response = await authApi.login(phone, password);
+      const response = await authApi.login(identifier, password);
 
       if (response.success) {
         const { user, accessToken, refreshToken } = response;
@@ -118,15 +118,15 @@ export default function LoginPage() {
           <form onSubmit={handleSubmit}>
             <TextField
               fullWidth
-              label="Phone Number"
-              placeholder="+92 3XX XXXXXXX"
-              value={phone}
-              onChange={(e) => setPhone(e.target.value)}
+              label="Phone or Email"
+              placeholder="+92 3XX XXXXXXX or you@example.com"
+              value={identifier}
+              onChange={(e) => setIdentifier(e.target.value)}
               sx={{ mb: 2 }}
               InputProps={{
                 startAdornment: (
                   <InputAdornment position="start">
-                    <PhoneIcon color="action" />
+                    <PersonIcon color="action" />
                   </InputAdornment>
                 ),
               }}
@@ -163,7 +163,7 @@ export default function LoginPage() {
               fullWidth
               variant="contained"
               size="large"
-              disabled={loading || !phone || !password}
+              disabled={loading || !identifier || !password}
               sx={{
                 py: 1.5,
                 borderRadius: 2,
