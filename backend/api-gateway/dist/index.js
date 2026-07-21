@@ -46,7 +46,21 @@ app.use(helmet({
 app.use(securityHeaders);
 // CORS
 app.use(cors({
-    origin: config.corsOrigins,
+    origin: (origin, callback) => {
+        // No Origin header — same-origin, curl, server-to-server, etc.
+        if (!origin)
+            return callback(null, true);
+        if (config.corsOrigins.includes(origin)) {
+            return callback(null, true);
+        }
+        // Vercel mints a unique preview URL per branch/PR (*.vercel.app) in
+        // addition to the fixed production domain — allow all of them so
+        // every new preview deploy doesn't need CORS_ORIGINS updated by hand.
+        if (/^https:\/\/[a-z0-9-]+\.vercel\.app$/.test(origin)) {
+            return callback(null, true);
+        }
+        callback(new Error(`Origin not allowed by CORS: ${origin}`));
+    },
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization', 'X-Request-ID', 'ngrok-skip-browser-warning'],
