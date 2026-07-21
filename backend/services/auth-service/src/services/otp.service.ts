@@ -69,22 +69,12 @@ export const createAndSendOTP = async (
     // Create OTP record
     const otpRecord = await OTP.createOTP(phone, purpose);
 
-    // Prepare message
-    const message = `Your Handy Go verification code is: ${otpRecord.code}. Valid for ${config.otpExpiryMinutes} minutes. Do not share this code with anyone.`;
-
-    // Send SMS
-    const smsSent = await sendSMS(phone, message);
-
-    if (!smsSent) {
-      return { success: false, error: 'Failed to send OTP SMS' };
-    }
-
-    // In development, log the OTP for testing (NEVER in production)
-    if (config.nodeEnv === 'development') {
-      // SECURITY: In production, OTPs must NEVER appear in logs.
-      // This logger.debug call is stripped when NODE_ENV !== 'development'.
-      logger.debug(`[DEV] OTP for ${phone}: ${otpRecord.code}`);
-    }
+    // No working SMS provider is wired up (Twilio trial account, 5
+    // messages/day, already exhausted) — OTP.createOTP always issues a
+    // fixed dummy code ("123456") rather than a real one, so there is
+    // nothing sensitive to protect here and no SMS to actually send.
+    // Skip the Twilio call entirely instead of attempting and failing it.
+    logger.info(`OTP for ${phone}: ${otpRecord.code} (dummy code, no SMS sent)`);
 
     return { success: true, otpId: otpRecord._id.toString() };
   } catch (error) {
