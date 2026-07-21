@@ -26,29 +26,29 @@ class AuthLoading extends AuthState {
 
 /// OTP sent successfully
 class OTPSent extends AuthState {
-  final String email;
+  final String phone;
   final String purpose;
 
-  const OTPSent({required this.email, required this.purpose});
+  const OTPSent({required this.phone, required this.purpose});
 
   @override
-  List<Object?> get props => [email, purpose];
+  List<Object?> get props => [phone, purpose];
 }
 
 /// OTP verified successfully
 class OTPVerified extends AuthState {
   final bool isNewUser;
   final String tempToken;
-  final String email;
+  final String phone;
 
   const OTPVerified({
     required this.isNewUser,
     required this.tempToken,
-    required this.email,
+    required this.phone,
   });
 
   @override
-  List<Object?> get props => [isNewUser, tempToken, email];
+  List<Object?> get props => [isNewUser, tempToken, phone];
 }
 
 /// User is authenticated

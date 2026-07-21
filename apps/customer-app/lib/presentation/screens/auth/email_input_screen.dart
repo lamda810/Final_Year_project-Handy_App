@@ -9,7 +9,7 @@ import '../../blocs/auth/auth_bloc.dart';
 import '../../blocs/auth/auth_event.dart';
 import '../../blocs/auth/auth_state.dart';
 
-/// Email input screen for authentication
+/// Phone input screen for authentication (registration OTP)
 class EmailInputScreen extends StatefulWidget {
   const EmailInputScreen({super.key});
 
@@ -19,21 +19,29 @@ class EmailInputScreen extends StatefulWidget {
 
 class _EmailInputScreenState extends State<EmailInputScreen> {
   final _formKey = GlobalKey<FormState>();
-  final _emailController = TextEditingController();
+  final _phoneController = TextEditingController();
 
   @override
   void dispose() {
-    _emailController.dispose();
+    _phoneController.dispose();
     super.dispose();
   }
 
   void _sendOtp() {
     if (!_formKey.currentState!.validate()) return;
 
-    final email = _emailController.text.trim().toLowerCase();
+    final cleaned = _phoneController.text.trim().replaceAll(
+      RegExp(r'[\s\-\(\)]'),
+      '',
+    );
+    final phone = cleaned.startsWith('+92')
+        ? cleaned
+        : cleaned.startsWith('0')
+        ? '+92${cleaned.substring(1)}'
+        : '+92$cleaned';
 
     context.read<AuthBloc>().add(
-      SendOTPRequested(email: email, purpose: 'REGISTRATION'),
+      SendOTPRequested(phone: phone, purpose: 'REGISTRATION'),
     );
   }
 
@@ -43,7 +51,7 @@ class _EmailInputScreenState extends State<EmailInputScreen> {
         if (context.mounted) {
           Navigator.of(context).pushNamed(
             AppRoutes.otpVerification,
-            arguments: {'email': state.email, 'purpose': state.purpose},
+            arguments: {'phone': state.phone, 'purpose': state.purpose},
           );
         }
       });
@@ -76,7 +84,7 @@ class _EmailInputScreenState extends State<EmailInputScreen> {
 
                     // Header
                     Text(
-                      AppStrings.enterEmail,
+                      AppStrings.enterPhone,
                       style: TextStyle(
                         fontSize: 28,
                         fontWeight: FontWeight.bold,
@@ -88,7 +96,7 @@ class _EmailInputScreenState extends State<EmailInputScreen> {
 
                     // Subtext
                     Text(
-                      AppStrings.emailSubtext,
+                      AppStrings.phoneSubtext,
                       style: TextStyle(
                         fontSize: 16,
                         color: Theme.of(
@@ -99,19 +107,19 @@ class _EmailInputScreenState extends State<EmailInputScreen> {
 
                     const SizedBox(height: AppSpacing.xxl),
 
-                    // Email input field
+                    // Phone input field
                     TextFormField(
-                      controller: _emailController,
-                      keyboardType: TextInputType.emailAddress,
+                      controller: _phoneController,
+                      keyboardType: TextInputType.phone,
                       autofocus: true,
-                      autofillHints: const [AutofillHints.email],
+                      autofillHints: const [AutofillHints.telephoneNumber],
                       style: const TextStyle(
                         fontSize: 18,
                         fontWeight: FontWeight.w500,
                       ),
                       decoration: InputDecoration(
-                        prefixIcon: const Icon(Icons.email_outlined),
-                        hintText: 'you@example.com',
+                        prefixIcon: const Icon(Icons.phone_outlined),
+                        hintText: '+92 3XX XXXXXXX',
                         hintStyle: TextStyle(
                           color: Theme.of(
                             context,
@@ -119,8 +127,9 @@ class _EmailInputScreenState extends State<EmailInputScreen> {
                           fontWeight: FontWeight.normal,
                         ),
                       ),
-                      validator: (value) =>
-                          Validators.email(value, required: true),
+                      validator: Validators.phone,
+                      textInputAction: TextInputAction.done,
+                      onFieldSubmitted: (_) => _sendOtp(),
                     ),
 
                     const SizedBox(height: AppSpacing.xxl),

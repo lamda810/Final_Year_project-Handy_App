@@ -38,10 +38,16 @@ class _LoginScreenState extends State<LoginScreen> {
   void _login() {
     if (!_formKey.currentState!.validate()) return;
 
-    final email = _emailController.text.trim().toLowerCase();
+    // Accounts are now phone-verified at signup (no email collected), but
+    // this field accepts either — the datasource routes it to the right
+    // backend field based on whether it looks like an email.
+    final identifier = _emailController.text.trim();
+    final normalized = identifier.contains('@')
+        ? identifier.toLowerCase()
+        : identifier;
 
     context.read<AuthBloc>().add(
-      LoginRequested(email: email, password: _passwordController.text),
+      LoginRequested(email: normalized, password: _passwordController.text),
     );
   }
 
@@ -161,17 +167,18 @@ class _LoginScreenState extends State<LoginScreen> {
 
                     const SizedBox(height: AppSpacing.xxl),
 
-                    // Email input
+                    // Phone or email input
                     TextFormField(
                       controller: _emailController,
                       keyboardType: TextInputType.emailAddress,
-                      autofillHints: const [AutofillHints.email],
+                      autofillHints: const [AutofillHints.username],
                       decoration: const InputDecoration(
-                        labelText: 'Email',
-                        prefixIcon: Icon(Icons.email_outlined),
+                        labelText: 'Phone or Email',
+                        hintText: '+92 3XX XXXXXXX or you@example.com',
+                        prefixIcon: Icon(Icons.person_outline),
                       ),
                       validator: (value) =>
-                          Validators.email(value, required: true),
+                          Validators.required(value, fieldName: 'Phone or email'),
                     ),
 
                     const SizedBox(height: AppSpacing.md),

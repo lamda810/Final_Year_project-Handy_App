@@ -95,7 +95,7 @@ class AppRouter {
         final args = settings.arguments as Map<String, dynamic>?;
         return _buildRoute(
           OtpVerificationScreen(
-            email: args?['email'] ?? '',
+            phone: args?['phone'] ?? '',
             purpose: args?['purpose'] ?? 'REGISTRATION',
           ),
           settings,
@@ -105,7 +105,7 @@ class AppRouter {
         final args = settings.arguments as Map<String, dynamic>?;
         return _buildRoute(
           RegistrationScreen(
-            email: args?['email'] ?? '',
+            phone: args?['phone'] ?? '',
             tempToken: args?['tempToken'] ?? '',
           ),
           settings,
@@ -122,7 +122,7 @@ class AppRouter {
         return _buildRoute(
           ResetPasswordScreen(
             tempToken: args?['tempToken'] ?? '',
-            email: args?['email'] ?? '',
+            phone: args?['phone'] ?? '',
           ),
           settings,
         );

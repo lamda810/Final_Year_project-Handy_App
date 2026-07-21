@@ -20,6 +20,8 @@ class AppStrings {
   // Auth
   static const String enterEmail = 'Enter your email';
   static const String emailSubtext = 'We\'ll send you an OTP to verify your email';
+  static const String enterPhone = 'Enter your phone number';
+  static const String phoneSubtext = 'We\'ll send you an OTP to verify your phone number';
   static const String verificationCode = 'Verification Code';
   static const String otpSubtext = 'Enter the 6-digit code sent to';
   static const String resendOtp = 'Resend OTP';

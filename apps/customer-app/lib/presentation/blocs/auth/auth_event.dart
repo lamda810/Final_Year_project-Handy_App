@@ -13,31 +13,31 @@ class CheckAuthStatusRequested extends AuthEvent {
   const CheckAuthStatusRequested();
 }
 
-/// Event to send OTP to email address
+/// Event to send OTP to a phone number
 class SendOTPRequested extends AuthEvent {
-  final String email;
+  final String phone;
   final String purpose; // REGISTRATION, LOGIN, PASSWORD_RESET
 
-  const SendOTPRequested({required this.email, required this.purpose});
+  const SendOTPRequested({required this.phone, required this.purpose});
 
   @override
-  List<Object?> get props => [email, purpose];
+  List<Object?> get props => [phone, purpose];
 }
 
 /// Event to verify OTP code
 class VerifyOTPRequested extends AuthEvent {
-  final String email;
+  final String phone;
   final String code;
   final String purpose;
 
   const VerifyOTPRequested({
-    required this.email,
+    required this.phone,
     required this.code,
     required this.purpose,
   });
 
   @override
-  List<Object?> get props => [email, code, purpose];
+  List<Object?> get props => [phone, code, purpose];
 }
 
 /// Event to register a new customer
@@ -78,12 +78,12 @@ class LogoutRequested extends AuthEvent {
 
 /// Event to request forgot password OTP
 class ForgotPasswordRequested extends AuthEvent {
-  final String email;
+  final String phone;
 
-  const ForgotPasswordRequested({required this.email});
+  const ForgotPasswordRequested({required this.phone});
 
   @override
-  List<Object?> get props => [email];
+  List<Object?> get props => [phone];
 }
 
 /// Event to reset password

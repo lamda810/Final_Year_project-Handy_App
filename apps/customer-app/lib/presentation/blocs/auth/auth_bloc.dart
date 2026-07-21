@@ -55,8 +55,8 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
     emit(const AuthLoading(message: 'Sending OTP...'));
 
     try {
-      await _authRepository.sendOTP(email: event.email, purpose: event.purpose);
-      emit(OTPSent(email: event.email, purpose: event.purpose));
+      await _authRepository.sendOTP(phone: event.phone, purpose: event.purpose);
+      emit(OTPSent(phone: event.phone, purpose: event.purpose));
     } catch (e) {
       emit(AuthError(message: ErrorMapper.toUserMessage(e)));
     }
@@ -70,7 +70,7 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
 
     try {
       final result = await _authRepository.verifyOTP(
-        email: event.email,
+        phone: event.phone,
         code: event.code,
         purpose: event.purpose,
       );
@@ -78,7 +78,7 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
         OTPVerified(
           isNewUser: result.isNewUser,
           tempToken: result.tempToken,
-          email: event.email,
+          phone: event.phone,
         ),
       );
     } catch (e) {
@@ -138,8 +138,8 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
     emit(const AuthLoading(message: 'Sending password reset OTP...'));
 
     try {
-      await _authRepository.forgotPassword(email: event.email);
-      emit(OTPSent(email: event.email, purpose: 'PASSWORD_RESET'));
+      await _authRepository.forgotPassword(phone: event.phone);
+      emit(OTPSent(phone: event.phone, purpose: 'PASSWORD_RESET'));
     } catch (e) {
       emit(AuthError(message: ErrorMapper.toUserMessage(e)));
     }

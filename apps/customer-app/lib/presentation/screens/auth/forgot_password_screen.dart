@@ -18,20 +18,28 @@ class ForgotPasswordScreen extends StatefulWidget {
 
 class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
   final _formKey = GlobalKey<FormState>();
-  final _emailController = TextEditingController();
+  final _phoneController = TextEditingController();
 
   @override
   void dispose() {
-    _emailController.dispose();
+    _phoneController.dispose();
     super.dispose();
   }
 
   void _requestReset() {
     if (!_formKey.currentState!.validate()) return;
 
-    final email = _emailController.text.trim().toLowerCase();
+    final cleaned = _phoneController.text.trim().replaceAll(
+      RegExp(r'[\s\-\(\)]'),
+      '',
+    );
+    final phone = cleaned.startsWith('+92')
+        ? cleaned
+        : cleaned.startsWith('0')
+        ? '+92${cleaned.substring(1)}'
+        : '+92$cleaned';
 
-    context.read<AuthBloc>().add(ForgotPasswordRequested(email: email));
+    context.read<AuthBloc>().add(ForgotPasswordRequested(phone: phone));
   }
 
   void _handleAuthState(BuildContext context, AuthState state) {
@@ -40,7 +48,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
         if (context.mounted) {
           Navigator.of(context).pushNamed(
             AppRoutes.otpVerification,
-            arguments: {'email': state.email, 'purpose': 'PASSWORD_RESET'},
+            arguments: {'phone': state.phone, 'purpose': 'PASSWORD_RESET'},
           );
         }
       });
@@ -112,7 +120,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
 
                     // Subtext
                     Text(
-                      'Enter your email address and we\'ll send you a verification code to reset your password.',
+                      'Enter your phone number and we\'ll send you a verification code to reset your password.',
                       style: TextStyle(
                         fontSize: 16,
                         color: Theme.of(
@@ -124,29 +132,28 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
 
                     const SizedBox(height: AppSpacing.xxl),
 
-                    // Email input field
+                    // Phone input field
                     TextFormField(
-                      controller: _emailController,
-                      keyboardType: TextInputType.emailAddress,
+                      controller: _phoneController,
+                      keyboardType: TextInputType.phone,
                       autofocus: true,
-                      autofillHints: const [AutofillHints.email],
+                      autofillHints: const [AutofillHints.telephoneNumber],
                       style: const TextStyle(
                         fontSize: 18,
                         fontWeight: FontWeight.w500,
                       ),
                       decoration: InputDecoration(
-                        prefixIcon: const Icon(Icons.email_outlined),
-                        hintText: 'you@example.com',
+                        prefixIcon: const Icon(Icons.phone_outlined),
+                        hintText: '+92 3XX XXXXXXX',
                         hintStyle: TextStyle(
                           color: Theme.of(
                             context,
                           ).colorScheme.onSurface.withValues(alpha: 0.6),
                           fontWeight: FontWeight.normal,
                         ),
-                        labelText: 'Email',
+                        labelText: 'Phone Number',
                       ),
-                      validator: (value) =>
-                          Validators.email(value, required: true),
+                      validator: Validators.phone,
                     ),
 
                     const SizedBox(height: AppSpacing.xxl),

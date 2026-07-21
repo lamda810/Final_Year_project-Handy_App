@@ -61,20 +61,20 @@ class AuthRepositoryImpl implements AuthRepository {
 
   @override
   Future<OTPSendResponse> sendOTP({
-    required String email,
+    required String phone,
     required String purpose,
   }) async {
-    return await _remoteDataSource.sendOTP(email: email, purpose: purpose);
+    return await _remoteDataSource.sendOTP(phone: phone, purpose: purpose);
   }
 
   @override
   Future<OTPVerificationResult> verifyOTP({
-    required String email,
+    required String phone,
     required String code,
     required String purpose,
   }) async {
     return await _remoteDataSource.verifyOTP(
-      email: email,
+      phone: phone,
       code: code,
       purpose: purpose,
     );
@@ -136,8 +136,8 @@ class AuthRepositoryImpl implements AuthRepository {
   }
 
   @override
-  Future<void> forgotPassword({required String email}) async {
-    await _remoteDataSource.forgotPassword(email: email);
+  Future<void> forgotPassword({required String phone}) async {
+    await _remoteDataSource.forgotPassword(phone: phone);
   }
 
   @override

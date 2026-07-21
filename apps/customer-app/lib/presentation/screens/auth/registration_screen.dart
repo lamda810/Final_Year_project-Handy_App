@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/constants/app_strings.dart';
@@ -13,10 +12,10 @@ import '../../blocs/auth/auth_state.dart';
 
 /// Registration screen for new users
 class RegistrationScreen extends StatefulWidget {
-  final String email;
+  final String phone;
   final String tempToken;
 
-  const RegistrationScreen({super.key, this.email = '', this.tempToken = ''});
+  const RegistrationScreen({super.key, this.phone = '', this.tempToken = ''});
 
   @override
   State<RegistrationScreen> createState() => _RegistrationScreenState();
@@ -38,7 +37,12 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
   @override
   void initState() {
     super.initState();
-    _autoDetectPhoneNumber();
+    // Pre-fill with the number verified via OTP; only fall back to SIM
+    // auto-detect in the unexpected case that it's somehow empty.
+    _phoneController.text = widget.phone;
+    if (widget.phone.isEmpty) {
+      _autoDetectPhoneNumber();
+    }
   }
 
   /// Attempt to auto-detect SIM phone number and pre-fill the field
@@ -146,19 +150,6 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
 
                     const SizedBox(height: AppSpacing.sm),
 
-                    // Email display (verified)
-                    Text(
-                      'Email: ${widget.email}',
-                      style: TextStyle(
-                        fontSize: 14,
-                        color: Theme.of(
-                          context,
-                        ).colorScheme.onSurface.withValues(alpha: 0.7),
-                      ),
-                    ),
-
-                    const SizedBox(height: AppSpacing.xl),
-
                     // First Name
                     TextFormField(
                       controller: _firstNameController,
@@ -189,19 +180,15 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
 
                     const SizedBox(height: AppSpacing.md),
 
-                    // Phone (optional) with SIM auto-detect
+                    // Verified phone number (from OTP step)
                     TextFormField(
                       controller: _phoneController,
-                      keyboardType: TextInputType.phone,
+                      readOnly: true,
                       autofillHints: const [AutofillHints.telephoneNumber],
-                      inputFormatters: [
-                        FilteringTextInputFormatter.digitsOnly,
-                        LengthLimitingTextInputFormatter(11),
-                      ],
+                      keyboardType: TextInputType.phone,
                       decoration: InputDecoration(
-                        labelText: 'Phone Number (Optional)',
+                        labelText: 'Phone Number (Verified)',
                         prefixIcon: const Icon(Icons.phone_outlined),
-                        hintText: '03XX XXXXXXX',
                         suffixIcon: _detectingPhone
                             ? const Padding(
                                 padding: EdgeInsets.all(12),
@@ -213,11 +200,7 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
                                   ),
                                 ),
                               )
-                            : IconButton(
-                                icon: const Icon(Icons.sim_card_outlined),
-                                tooltip: 'Detect from SIM',
-                                onPressed: _autoDetectPhoneNumber,
-                              ),
+                            : null,
                       ),
                     ),
 

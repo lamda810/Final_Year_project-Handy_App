@@ -12,14 +12,14 @@ class AuthRemoteDataSourceImpl implements AuthRemoteDataSource {
 
   @override
   Future<OTPSendResponse> sendOTP({
-    required String email,
+    required String phone,
     required String purpose,
   }) async {
     try {
       final response = await _dio.post(
         ApiEndpoints.sendOTP,
         data: {
-          'email': email,
+          'phone': phone,
           'purpose': purpose,
         },
       );
@@ -32,7 +32,7 @@ class AuthRemoteDataSourceImpl implements AuthRemoteDataSource {
 
   @override
   Future<OTPVerificationResult> verifyOTP({
-    required String email,
+    required String phone,
     required String code,
     required String purpose,
   }) async {
@@ -40,7 +40,7 @@ class AuthRemoteDataSourceImpl implements AuthRemoteDataSource {
       final response = await _dio.post(
         ApiEndpoints.verifyOTP,
         data: {
-          'email': email,
+          'phone': phone,
           'code': code,
           'purpose': purpose,
         },
@@ -83,13 +83,18 @@ class AuthRemoteDataSourceImpl implements AuthRemoteDataSource {
     required String email,
     required String password,
   }) async {
+    // Customer accounts are now phone-verified at signup (email is not
+    // collected), but the backend's /auth/login accepts either — so route
+    // whatever was typed to the right field rather than always sending it
+    // as "email", which would reject a phone number outright.
+    final isEmail = email.contains('@');
+
     try {
       final response = await _dio.post(
         ApiEndpoints.login,
-        data: {
-          'email': email,
-          'password': password,
-        },
+        data: isEmail
+            ? {'email': email, 'password': password}
+            : {'phone': email, 'password': password},
       );
 
       return AuthResponse.fromJson(response.data);
@@ -115,12 +120,12 @@ class AuthRemoteDataSourceImpl implements AuthRemoteDataSource {
   }
 
   @override
-  Future<OTPSendResponse> forgotPassword({required String email}) async {
+  Future<OTPSendResponse> forgotPassword({required String phone}) async {
     try {
       final response = await _dio.post(
         ApiEndpoints.forgotPassword,
         data: {
-          'email': email,
+          'phone': phone,
         },
       );
 

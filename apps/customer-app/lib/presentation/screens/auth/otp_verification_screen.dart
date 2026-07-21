@@ -12,12 +12,12 @@ import '../../blocs/auth/auth_state.dart';
 
 /// OTP verification screen
 class OtpVerificationScreen extends StatefulWidget {
-  final String email;
+  final String phone;
   final String purpose;
 
   const OtpVerificationScreen({
     super.key,
-    this.email = '',
+    this.phone = '',
     this.purpose = 'REGISTRATION',
   });
 
@@ -55,13 +55,14 @@ class _OtpVerificationScreenState extends State<OtpVerificationScreen> {
     });
   }
 
-  String get _maskedEmail {
-    final email = widget.email;
-    final atIndex = email.indexOf('@');
-    if (atIndex > 2) {
-      return '${email.substring(0, 2)}${'*' * (atIndex - 2)}${email.substring(atIndex)}';
+  String get _maskedPhone {
+    final phone = widget.phone;
+    if (phone.length > 4) {
+      final visible = phone.substring(phone.length - 4);
+      final masked = '*' * (phone.length - 4);
+      return '$masked$visible';
     }
-    return email;
+    return phone;
   }
 
   void _verifyOtp() {
@@ -74,7 +75,7 @@ class _OtpVerificationScreenState extends State<OtpVerificationScreen> {
 
     context.read<AuthBloc>().add(
       VerifyOTPRequested(
-        email: widget.email,
+        phone: widget.phone,
         code: _otpController.text,
         purpose: widget.purpose,
       ),
@@ -85,7 +86,7 @@ class _OtpVerificationScreenState extends State<OtpVerificationScreen> {
     if (_resendTimer > 0) return;
 
     context.read<AuthBloc>().add(
-      SendOTPRequested(email: widget.email, purpose: widget.purpose),
+      SendOTPRequested(phone: widget.phone, purpose: widget.purpose),
     );
     _startTimer();
   }
@@ -98,7 +99,7 @@ class _OtpVerificationScreenState extends State<OtpVerificationScreen> {
           if (context.mounted) {
             Navigator.of(context).pushNamed(
               AppRoutes.resetPassword,
-              arguments: {'email': state.email, 'tempToken': state.tempToken},
+              arguments: {'phone': state.phone, 'tempToken': state.tempToken},
             );
           }
         });
@@ -108,7 +109,7 @@ class _OtpVerificationScreenState extends State<OtpVerificationScreen> {
           if (context.mounted) {
             Navigator.of(context).pushNamed(
               AppRoutes.registration,
-              arguments: {'email': state.email, 'tempToken': state.tempToken},
+              arguments: {'phone': state.phone, 'tempToken': state.tempToken},
             );
           }
         });
@@ -173,7 +174,7 @@ class _OtpVerificationScreenState extends State<OtpVerificationScreen> {
 
                   // Subtext
                   Text(
-                    '${AppStrings.otpSubtext} $_maskedEmail',
+                    '${AppStrings.otpSubtext} $_maskedPhone',
                     style: TextStyle(
                       fontSize: 16,
                       color: Theme.of(

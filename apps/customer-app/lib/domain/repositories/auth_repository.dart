@@ -15,15 +15,15 @@ abstract class AuthRepository {
   /// Get current logged in user
   Future<UserModel?> getCurrentUser();
 
-  /// Send OTP to email address
+  /// Send OTP to a phone number
   Future<OTPSendResponse> sendOTP({
-    required String email,
+    required String phone,
     required String purpose,
   });
 
   /// Verify OTP code
   Future<OTPVerificationResult> verifyOTP({
-    required String email,
+    required String phone,
     required String code,
     required String purpose,
   });
@@ -44,7 +44,7 @@ abstract class AuthRepository {
   Future<void> refreshToken();
 
   /// Request password reset OTP (forgot password)
-  Future<void> forgotPassword({required String email});
+  Future<void> forgotPassword({required String phone});
 
   /// Reset password
   Future<void> resetPassword({

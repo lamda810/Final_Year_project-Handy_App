@@ -3,12 +3,12 @@ import '../../models/auth_response_model.dart';
 /// Remote data source for authentication operations
 abstract class AuthRemoteDataSource {
   Future<OTPSendResponse> sendOTP({
-    required String email,
+    required String phone,
     required String purpose,
   });
 
   Future<OTPVerificationResult> verifyOTP({
-    required String email,
+    required String phone,
     required String code,
     required String purpose,
   });
@@ -26,7 +26,7 @@ abstract class AuthRemoteDataSource {
   Future<AuthResponse> refreshToken({required String refreshToken});
 
   /// Request password reset OTP
-  Future<OTPSendResponse> forgotPassword({required String email});
+  Future<OTPSendResponse> forgotPassword({required String phone});
 
   /// Reset password with verified token
   Future<void> resetPassword({
