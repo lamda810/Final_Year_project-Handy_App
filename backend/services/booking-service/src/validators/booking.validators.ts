@@ -88,3 +88,20 @@ export const adminQuerySchema = Joi.object({
 export const sendMessageSchema = Joi.object({
   message: Joi.string().min(1).max(2000).required().trim(),
 });
+
+export const proposeOfferSchema = Joi.object({
+  amount: Joi.number().min(1).max(1000000).required(),
+});
+
+export const startJobWithOtpSchema = Joi.object({
+  beforeImages: Joi.array().items(Joi.string().uri()).max(5),
+  otpCode: Joi.string().length(6).pattern(/^\d+$/).required(),
+});
+
+export const completeJobWithOtpSchema = Joi.object({
+  afterImages: Joi.array().items(Joi.string().uri()).max(5),
+  finalPrice: Joi.number().min(0),
+  materialsCost: Joi.number().min(0).default(0),
+  notes: Joi.string().max(500).trim(),
+  otpCode: Joi.string().length(6).pattern(/^\d+$/).required(),
+});

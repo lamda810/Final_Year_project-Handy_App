@@ -49,6 +49,7 @@ export interface IBookingAddress {
  */
 export interface IPricing {
   estimatedPrice?: number;
+  negotiatedPrice?: number;
   finalPrice?: number;
   laborCost?: number;
   materialsCost?: number;
@@ -234,6 +235,7 @@ const bookingSchema = new Schema<IBooking, IBookingModel>(
     },
     pricing: {
       estimatedPrice: Number,
+      negotiatedPrice: Number,
       finalPrice: Number,
       laborCost: Number,
       materialsCost: Number,

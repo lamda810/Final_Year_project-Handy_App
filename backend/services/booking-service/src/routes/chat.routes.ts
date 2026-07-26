@@ -2,7 +2,7 @@ import { Router, IRouter } from 'express';
 import { authenticate, authorize, validate } from '@handy-go/shared';
 import * as chatController from '../controllers/chat.controller.js';
 import * as customerController from '../controllers/customer.controller.js';
-import { sendMessageSchema } from '../validators/booking.validators.js';
+import { sendMessageSchema, proposeOfferSchema } from '../validators/booking.validators.js';
 
 const router: IRouter = Router();
 
@@ -46,6 +46,43 @@ router.post(
   authorize('CUSTOMER', 'WORKER'),
   validate(sendMessageSchema),
   chatController.sendMessage
+);
+
+/**
+ * @route   POST /api/bookings/:bookingId/offers
+ * @desc    Propose a price offer or counter-offer
+ * @access  Private (Customer or Worker participant)
+ */
+router.post(
+  '/:bookingId([0-9a-fA-F]{24})/offers',
+  authenticate,
+  authorize('CUSTOMER', 'WORKER'),
+  validate(proposeOfferSchema),
+  chatController.proposeOffer
+);
+
+/**
+ * @route   POST /api/bookings/:bookingId/offers/:offerId/accept
+ * @desc    Accept a pending price offer
+ * @access  Private (Customer or Worker participant)
+ */
+router.post(
+  '/:bookingId([0-9a-fA-F]{24})/offers/:offerId([0-9a-fA-F]{24})/accept',
+  authenticate,
+  authorize('CUSTOMER', 'WORKER'),
+  chatController.acceptOffer
+);
+
+/**
+ * @route   POST /api/bookings/:bookingId/offers/:offerId/reject
+ * @desc    Reject a pending price offer
+ * @access  Private (Customer or Worker participant)
+ */
+router.post(
+  '/:bookingId([0-9a-fA-F]{24})/offers/:offerId([0-9a-fA-F]{24})/reject',
+  authenticate,
+  authorize('CUSTOMER', 'WORKER'),
+  chatController.rejectOffer
 );
 
 export default router;

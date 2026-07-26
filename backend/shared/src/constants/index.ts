@@ -78,7 +78,7 @@ export const SOS_STATUS = ['ACTIVE', 'RESOLVED', 'ESCALATED', 'FALSE_ALARM'] as 
 export type SOSStatus = (typeof SOS_STATUS)[number];
 
 // OTP Purposes
-export const OTP_PURPOSES = ['REGISTRATION', 'LOGIN', 'PASSWORD_RESET'] as const;
+export const OTP_PURPOSES = ['REGISTRATION', 'LOGIN', 'PASSWORD_RESET', 'JOB_START', 'JOB_END'] as const;
 export type OTPPurpose = (typeof OTP_PURPOSES)[number];
 
 // Notification Types

@@ -5,8 +5,8 @@ import { validate } from '@handy-go/shared';
 import {
   acceptBookingSchema,
   rejectBookingSchema,
-  startJobSchema,
-  completeJobSchema,
+  startJobWithOtpSchema,
+  completeJobWithOtpSchema,
   updateLocationSchema,
 } from '../validators/booking.validators.js';
 
@@ -46,17 +46,17 @@ router.post('/:bookingId/reject', validate(rejectBookingSchema), workerControlle
 
 /**
  * @route   POST /api/bookings/:bookingId/start
- * @desc    Start job
+ * @desc    Start job (requires the JOB_START OTP the customer reads aloud)
  * @access  Private (Worker)
  */
-router.post('/:bookingId/start', validate(startJobSchema), workerController.startJob);
+router.post('/:bookingId/start', validate(startJobWithOtpSchema), workerController.startJob);
 
 /**
  * @route   POST /api/bookings/:bookingId/complete
- * @desc    Complete job
+ * @desc    Complete job (requires the JOB_END OTP the customer reads aloud)
  * @access  Private (Worker)
  */
-router.post('/:bookingId/complete', validate(completeJobSchema), workerController.completeJob);
+router.post('/:bookingId/complete', validate(completeJobWithOtpSchema), workerController.completeJob);
 
 /**
  * @route   PUT /api/bookings/:bookingId/location

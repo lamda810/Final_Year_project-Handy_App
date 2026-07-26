@@ -44,6 +44,14 @@ router.get('/customer', customerController.getCustomerBookings);
 router.get('/:bookingId', customerController.getBookingDetails);
 
 /**
+ * @route   GET /api/bookings/:bookingId/job-otp?purpose=JOB_START|JOB_END
+ * @desc    Generate/reveal the OTP the customer reads aloud to the worker
+ *          to confirm job start or job end
+ * @access  Private (Customer)
+ */
+router.get('/:bookingId/job-otp', customerController.getJobOtp);
+
+/**
  * @route   POST /api/bookings/:bookingId/cancel
  * @desc    Cancel booking
  * @access  Private (Customer)
