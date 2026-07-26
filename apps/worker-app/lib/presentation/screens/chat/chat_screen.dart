@@ -84,6 +84,9 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
             isMe: row['senderType'] == 'WORKER',
             timestamp:
                 DateTime.tryParse(row['createdAt'] ?? '') ?? DateTime.now(),
+            messageType: row['messageType'] ?? 'TEXT',
+            offerAmount: (row['offerAmount'] as num?)?.toDouble(),
+            offerStatus: row['offerStatus'],
           ),
         );
       }
@@ -175,6 +178,79 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
           ),
         );
       }
+    }
+  }
+
+  Future<void> _proposeOffer() async {
+    final controller = TextEditingController();
+    final amount = await showDialog<double>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Propose a Price'),
+        content: TextField(
+          controller: controller,
+          autofocus: true,
+          keyboardType: const TextInputType.numberWithOptions(decimal: true),
+          decoration: const InputDecoration(
+            prefixText: 'Rs. ',
+            hintText: 'Enter amount',
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              final value = double.tryParse(controller.text.trim());
+              Navigator.pop(context, value);
+            },
+            child: const Text('Send Offer'),
+          ),
+        ],
+      ),
+    );
+    if (amount == null || amount <= 0) return;
+
+    try {
+      await _dio.post(
+        ApiEndpoints.bookingOffers(widget.bookingId),
+        data: {'amount': amount},
+      );
+      await _loadMessages();
+      _scrollToBottom();
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'Failed to send offer: ${e.toString().replaceAll("Exception: ", "")}',
+          ),
+          backgroundColor: AppColors.error,
+        ),
+      );
+    }
+  }
+
+  Future<void> _respondToOffer(_ChatMessage message, bool accept) async {
+    try {
+      final path = accept
+          ? ApiEndpoints.acceptOffer(widget.bookingId, message.id)
+          : ApiEndpoints.rejectOffer(widget.bookingId, message.id);
+      await _dio.post(path);
+      await _loadMessages();
+      _scrollToBottom();
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'Failed to respond: ${e.toString().replaceAll("Exception: ", "")}',
+          ),
+          backgroundColor: AppColors.error,
+        ),
+      );
     }
   }
 
@@ -300,6 +376,10 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
   }
 
   Widget _buildMessageBubble(_ChatMessage message) {
+    if (message.isOffer) {
+      return _buildOfferBubble(message);
+    }
+
     return Align(
       alignment: message.isMe ? Alignment.centerRight : Alignment.centerLeft,
       child: Container(
@@ -356,6 +436,90 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
     );
   }
 
+  Widget _buildOfferBubble(_ChatMessage message) {
+    final isMe = message.isMe;
+    final canRespond = !isMe && message.isPending;
+    final amountText = 'Rs. ${message.offerAmount?.toStringAsFixed(0) ?? '-'}';
+
+    String statusLabel;
+    Color statusColor;
+    switch (message.offerStatus) {
+      case 'ACCEPTED':
+        statusLabel = 'Accepted';
+        statusColor = AppColors.success;
+      case 'REJECTED':
+        statusLabel = 'Rejected';
+        statusColor = AppColors.error;
+      case 'SUPERSEDED':
+        statusLabel = 'Superseded by a new offer';
+        statusColor = Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.6);
+      default:
+        statusLabel = isMe ? 'Waiting for response' : 'Awaiting your response';
+        statusColor = AppColors.warning;
+    }
+
+    return Align(
+      alignment: isMe ? Alignment.centerRight : Alignment.centerLeft,
+      child: Container(
+        constraints: BoxConstraints(maxWidth: MediaQuery.of(context).size.width * 0.75),
+        margin: const EdgeInsets.symmetric(vertical: 4),
+        padding: const EdgeInsets.all(AppSpacing.md),
+        decoration: BoxDecoration(
+          color: AppColors.primary.withValues(alpha: 0.08),
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: AppColors.primary.withValues(alpha: 0.3)),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                const Icon(Icons.local_offer_outlined, size: 18, color: AppColors.primary),
+                const SizedBox(width: 6),
+                Text(
+                  'Price Offer',
+                  style: TextStyle(fontWeight: FontWeight.w600, color: AppColors.primary),
+                ),
+              ],
+            ),
+            const SizedBox(height: 4),
+            Text(
+              amountText,
+              style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              statusLabel,
+              style: TextStyle(fontSize: 12, color: statusColor, fontWeight: FontWeight.w600),
+            ),
+            if (canRespond) ...[
+              const SizedBox(height: AppSpacing.sm),
+              Row(
+                children: [
+                  Expanded(
+                    child: OutlinedButton(
+                      onPressed: () => _respondToOffer(message, false),
+                      style: OutlinedButton.styleFrom(foregroundColor: AppColors.error),
+                      child: const Text('Reject'),
+                    ),
+                  ),
+                  const SizedBox(width: AppSpacing.sm),
+                  Expanded(
+                    child: ElevatedButton(
+                      onPressed: () => _respondToOffer(message, true),
+                      style: ElevatedButton.styleFrom(backgroundColor: AppColors.success),
+                      child: const Text('Accept'),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+
   Widget _buildMessageInput() {
     return Container(
       padding: const EdgeInsets.all(AppSpacing.sm),
@@ -372,6 +536,11 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
       child: SafeArea(
         child: Row(
           children: [
+            IconButton(
+              icon: const Icon(Icons.local_offer_outlined, color: AppColors.primary),
+              tooltip: 'Propose Price',
+              onPressed: _proposeOffer,
+            ),
             Expanded(
               child: TextField(
                 controller: _messageController,
@@ -426,11 +595,20 @@ class _ChatMessage {
   final String text;
   final bool isMe;
   final DateTime timestamp;
+  final String messageType;
+  final double? offerAmount;
+  final String? offerStatus;
 
   const _ChatMessage({
     required this.id,
     required this.text,
     required this.isMe,
     required this.timestamp,
+    this.messageType = 'TEXT',
+    this.offerAmount,
+    this.offerStatus,
   });
+
+  bool get isOffer => messageType == 'PRICE_OFFER' || messageType == 'PRICE_COUNTER';
+  bool get isPending => offerStatus == 'PENDING';
 }

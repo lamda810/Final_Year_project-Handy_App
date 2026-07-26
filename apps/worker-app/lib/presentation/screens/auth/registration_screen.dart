@@ -218,10 +218,15 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
         if (state is Authenticated) {
           WidgetsBinding.instance.addPostFrameCallback((_) {
             if (context.mounted) {
+              // A brand-new worker always starts PENDING_VERIFICATION with
+              // no documents uploaded — send them straight to the upload
+              // flow instead of home, since they can't receive bookings
+              // until an admin reviews CNIC front/back + profile photo.
               Navigator.pushNamedAndRemoveUntil(
                 context,
-                AppRoutes.home,
+                AppRoutes.documents,
                 (route) => false,
+                arguments: true,
               );
             }
           });

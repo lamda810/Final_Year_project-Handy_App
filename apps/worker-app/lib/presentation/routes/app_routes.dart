@@ -17,6 +17,7 @@ import '../screens/profile/skills_screen.dart';
 import '../screens/profile/documents_screen.dart';
 import '../screens/notifications/notifications_screen.dart';
 import '../screens/chat/chat_screen.dart';
+import '../screens/chatbot/ai_assistant_screen.dart';
 import '../screens/sos/sos_screen.dart';
 
 class AppRoutes {
@@ -42,6 +43,7 @@ class AppRoutes {
   static const String notifications = '/notifications';
   static const String chat = '/chat';
   static const String sos = '/sos';
+  static const String aiAssistant = '/ai-assistant';
 
   static Route<dynamic> generateRoute(RouteSettings settings) {
     switch (settings.name) {
@@ -115,7 +117,10 @@ class AppRoutes {
         return MaterialPageRoute(builder: (_) => const SkillsScreen());
 
       case documents:
-        return MaterialPageRoute(builder: (_) => const DocumentsScreen());
+        final isOnboarding = settings.arguments == true;
+        return MaterialPageRoute(
+          builder: (_) => DocumentsScreen(isOnboarding: isOnboarding),
+        );
 
       case notifications:
         return MaterialPageRoute(builder: (_) => const NotificationsScreen());
@@ -140,6 +145,9 @@ class AppRoutes {
             customerPhone: args?['customerPhone'],
           ),
         );
+
+      case aiAssistant:
+        return MaterialPageRoute(builder: (_) => const AIAssistantScreen());
 
       default:
         return MaterialPageRoute(

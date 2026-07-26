@@ -86,13 +86,22 @@ export const updateAvailabilitySchema = Joi.object({
 });
 
 export const addDocumentSchema = Joi.object({
-  type: Joi.string().min(2).max(50).required().trim(),
+  type: Joi.string().valid('cnic_front', 'cnic_back', 'profile_photo').required(),
   url: Joi.string().uri().required().trim(),
 });
 
 export const verifyWorkerSchema = Joi.object({
   status: Joi.string().valid('ACTIVE', 'REJECTED').required(),
-  notes: Joi.string().max(500).trim(),
+  notes: Joi.string().max(500).trim().allow(''),
+  // Optional per-document review — when provided alongside an overall
+  // REJECTED status, only the listed documents are marked rejected (the
+  // rest stay 'pending' or 'verified' as they were) rather than assuming
+  // the whole application must be redone.
+  documentDecisions: Joi.object({
+    cnicFront: Joi.string().valid('verified', 'rejected'),
+    cnicBack: Joi.string().valid('verified', 'rejected'),
+    profilePhoto: Joi.string().valid('verified', 'rejected'),
+  }),
 });
 
 export const updateUserStatusSchema = Joi.object({

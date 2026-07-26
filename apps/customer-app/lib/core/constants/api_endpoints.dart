@@ -44,6 +44,12 @@ class ApiEndpoints {
   static String cancelBooking(String id) => '/bookings/$id/cancel';
   static String rateBooking(String id) => '/bookings/$id/rate';
   static String bookingMessages(String id) => '/bookings/$id/messages';
+  static String jobOtp(String id) => '/bookings/$id/job-otp';
+  static String bookingOffers(String id) => '/bookings/$id/offers';
+  static String acceptOffer(String bookingId, String offerId) =>
+      '/bookings/$bookingId/offers/$offerId/accept';
+  static String rejectOffer(String bookingId, String offerId) =>
+      '/bookings/$bookingId/offers/$offerId/reject';
 
   // Matching endpoints
   static const String analyzeProblem = '/matching/analyze-problem';

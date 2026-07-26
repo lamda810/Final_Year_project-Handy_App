@@ -59,6 +59,8 @@ export interface IGeoPoint {
 /**
  * Worker Document Interface
  */
+export type DocumentReviewStatus = 'pending' | 'verified' | 'rejected';
+
 export interface IWorker extends Document {
   _id: mongoose.Types.ObjectId;
   user: mongoose.Types.ObjectId;
@@ -72,6 +74,16 @@ export interface IWorker extends Document {
     front?: string;
     back?: string;
   };
+  // Flat, per-document verification fields the worker-app's onboarding/
+  // documents screens read directly (mirrors cnicImages.front/back but
+  // with independent review state per document, since an admin may
+  // approve the CNIC while rejecting the profile photo, etc.)
+  cnicFrontImage?: string;
+  cnicBackImage?: string;
+  cnicFrontStatus: DocumentReviewStatus;
+  cnicBackStatus: DocumentReviewStatus;
+  profilePhotoStatus: DocumentReviewStatus;
+  verificationNotes?: string;
   skills: ISkill[];
   currentLocation?: IGeoPoint;
   serviceRadius: number;
@@ -274,6 +286,28 @@ const workerSchema = new Schema<IWorker, IWorkerModel>(
     cnicImages: {
       front: String,
       back: String,
+    },
+    cnicFrontImage: String,
+    cnicBackImage: String,
+    cnicFrontStatus: {
+      type: String,
+      enum: ['pending', 'verified', 'rejected'],
+      default: 'pending',
+    },
+    cnicBackStatus: {
+      type: String,
+      enum: ['pending', 'verified', 'rejected'],
+      default: 'pending',
+    },
+    profilePhotoStatus: {
+      type: String,
+      enum: ['pending', 'verified', 'rejected'],
+      default: 'pending',
+    },
+    verificationNotes: {
+      type: String,
+      trim: true,
+      maxlength: 500,
     },
     skills: {
       type: [skillSchema],

@@ -152,6 +152,22 @@ class BookingLocationUpdated extends BookingState {
   List<Object?> get props => [bookingId, lat, lng, etaMinutes];
 }
 
+/// Job-start/job-end OTP generated, ready to show the customer
+class JobOtpRevealed extends BookingState {
+  final String code;
+  final String purpose;
+  final DateTime expiresAt;
+
+  const JobOtpRevealed({
+    required this.code,
+    required this.purpose,
+    required this.expiresAt,
+  });
+
+  @override
+  List<Object?> get props => [code, purpose, expiresAt];
+}
+
 /// SOS triggered state
 class SOSTriggered extends BookingState {
   final String sosId;

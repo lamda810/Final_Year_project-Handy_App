@@ -73,11 +73,15 @@ class RestBookingRepository implements BookingRepository {
   @override
   Future<BookingModel> startBooking(
     String bookingId, {
+    required String otpCode,
     List<String>? beforeImages,
   }) async {
     final response = await _dio.post(
       ApiEndpoints.startBooking(bookingId),
-      data: {if (beforeImages != null) 'beforeImages': beforeImages},
+      data: {
+        'otpCode': otpCode,
+        if (beforeImages != null) 'beforeImages': beforeImages,
+      },
     );
     return BookingModel.fromJson(response.data['data'] ?? response.data);
   }
@@ -85,6 +89,7 @@ class RestBookingRepository implements BookingRepository {
   @override
   Future<BookingModel> completeBooking(
     String bookingId, {
+    required String otpCode,
     List<String>? afterImages,
     double? finalPrice,
     double? materialsCost,
@@ -92,6 +97,7 @@ class RestBookingRepository implements BookingRepository {
     final response = await _dio.post(
       ApiEndpoints.completeBooking(bookingId),
       data: {
+        'otpCode': otpCode,
         if (afterImages != null) 'afterImages': afterImages,
         if (finalPrice != null) 'finalPrice': finalPrice,
         if (materialsCost != null) 'materialsCost': materialsCost,

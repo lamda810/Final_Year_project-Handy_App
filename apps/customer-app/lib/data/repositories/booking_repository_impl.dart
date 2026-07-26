@@ -148,4 +148,15 @@ class BookingRepositoryImpl implements BookingRepository {
       problemDescription: problemDescription,
     );
   }
+
+  @override
+  Future<JobOtpResult> getJobOtp({
+    required String bookingId,
+    required String purpose,
+  }) async {
+    return await _remoteDataSource.getJobOtp(
+      bookingId: bookingId,
+      purpose: purpose,
+    );
+  }
 }

@@ -24,15 +24,20 @@ abstract class BookingRepository {
   /// Reject / decline an available booking with a [reason].
   Future<void> rejectBooking(String bookingId, String reason);
 
-  /// Mark an accepted booking as started (IN_PROGRESS).
+  /// Mark an accepted booking as started (IN_PROGRESS). [otpCode] is the
+  /// code the customer reads aloud to the worker, verified server-side.
   Future<BookingModel> startBooking(
     String bookingId, {
+    required String otpCode,
     List<String>? beforeImages,
   });
 
-  /// Mark a booking as completed. Optionally attach after-images and final cost.
+  /// Mark a booking as completed. [otpCode] is the code the customer reads
+  /// aloud to the worker, verified server-side. Optionally attach
+  /// after-images and final cost.
   Future<BookingModel> completeBooking(
     String bookingId, {
+    required String otpCode,
     List<String>? afterImages,
     double? finalPrice,
     double? materialsCost,

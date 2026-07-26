@@ -72,6 +72,7 @@ class BookingsBloc extends Bloc<BookingsEvent, BookingsState> {
     try {
       final booking = await _bookingRepo.startBooking(
         event.bookingId,
+        otpCode: event.otpCode,
         beforeImages: event.beforeImages,
       );
       emit(BookingActionSuccess(booking, 'started'));
@@ -88,6 +89,7 @@ class BookingsBloc extends Bloc<BookingsEvent, BookingsState> {
     try {
       final booking = await _bookingRepo.completeBooking(
         event.bookingId,
+        otpCode: event.otpCode,
         afterImages: event.afterImages,
         finalPrice: event.finalPrice,
         materialsCost: event.materialsCost,

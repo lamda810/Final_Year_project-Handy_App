@@ -144,6 +144,12 @@ class _BookingTrackingScreenState extends State<BookingTrackingScreen> {
     );
   }
 
+  void _showJobOtp(String purpose) {
+    context.read<BookingBloc>().add(
+      RevealJobOtpRequested(bookingId: _bookingId, purpose: purpose),
+    );
+  }
+
   void _cancelBooking() {
     _cancelReasonController.clear();
     showDialog(
@@ -228,6 +234,16 @@ class _BookingTrackingScreenState extends State<BookingTrackingScreen> {
               backgroundColor: AppColors.error,
             ),
           );
+        } else if (state is JobOtpRevealed) {
+          showDialog(
+            context: context,
+            builder: (_) => _JobOtpDialog(
+              code: state.code,
+              title: state.purpose == 'JOB_END'
+                  ? 'Job Completion Code'
+                  : 'Job Start Code',
+            ),
+          );
         }
       },
       builder: (context, state) {
@@ -287,6 +303,11 @@ class _BookingTrackingScreenState extends State<BookingTrackingScreen> {
                     const SizedBox(height: AppSpacing.lg),
                     if (currentStatus.index >= _TrackingStatus.accepted.index)
                       _buildWorkerCard(),
+                    if (currentStatus == _TrackingStatus.accepted ||
+                        currentStatus == _TrackingStatus.inProgress) ...[
+                      const SizedBox(height: AppSpacing.lg),
+                      _buildJobOtpCard(currentStatus),
+                    ],
                     if (currentStatus == _TrackingStatus.completed) ...[
                       const SizedBox(height: AppSpacing.lg),
                       _buildCompletedActions(),
@@ -840,6 +861,50 @@ class _BookingTrackingScreenState extends State<BookingTrackingScreen> {
     );
   }
 
+  Widget _buildJobOtpCard(_TrackingStatus currentStatus) {
+    final isStart = currentStatus == _TrackingStatus.accepted;
+    final theme = Theme.of(context);
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(AppSpacing.md),
+      decoration: BoxDecoration(
+        color: theme.colorScheme.surface,
+        borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
+        border: Border.all(color: AppColors.primary.withValues(alpha: 0.3)),
+      ),
+      child: Row(
+        children: [
+          Icon(Icons.password, color: AppColors.primary),
+          const SizedBox(width: AppSpacing.sm),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  isStart ? 'Job Start Code' : 'Job Completion Code',
+                  style: const TextStyle(fontWeight: FontWeight.w600),
+                ),
+                Text(
+                  isStart
+                      ? 'Share this with your worker when they arrive'
+                      : 'Share this with your worker once the job is done',
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: theme.colorScheme.onSurface.withValues(alpha: 0.7),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          ElevatedButton(
+            onPressed: () => _showJobOtp(isStart ? 'JOB_START' : 'JOB_END'),
+            child: const Text('Show Code'),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildCompletedActions() {
     final colorScheme = Theme.of(context).colorScheme;
     return Container(
@@ -892,3 +957,45 @@ class _BookingTrackingScreenState extends State<BookingTrackingScreen> {
 }
 
 enum _TrackingStatus { pending, accepted, inProgress, completed, cancelled }
+
+/// Displays the generated job-start/job-end OTP in large, easy-to-read
+/// digits for the customer to read aloud to the worker.
+class _JobOtpDialog extends StatelessWidget {
+  final String code;
+  final String title;
+
+  const _JobOtpDialog({required this.code, required this.title});
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: Text(title),
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(
+            'Read this code to your worker:',
+            style: TextStyle(
+              color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.7),
+            ),
+          ),
+          const SizedBox(height: AppSpacing.md),
+          Text(
+            code,
+            style: const TextStyle(
+              fontSize: 36,
+              fontWeight: FontWeight.bold,
+              letterSpacing: 8,
+            ),
+          ),
+        ],
+      ),
+      actions: [
+        ElevatedButton(
+          onPressed: () => Navigator.pop(context),
+          child: const Text('Done'),
+        ),
+      ],
+    );
+  }
+}

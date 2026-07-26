@@ -6,6 +6,7 @@ import 'package:image_picker/image_picker.dart';
 import '../../blocs/auth/auth_bloc.dart';
 import '../../blocs/auth/auth_event.dart';
 import '../../blocs/auth/auth_state.dart';
+import '../../routes/app_routes.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/constants/app_spacing.dart';
 import '../../../core/network/dio_client.dart';
@@ -14,7 +15,12 @@ import '../../../domain/repositories/worker_repository.dart';
 import '../../../injection_container.dart';
 
 class DocumentsScreen extends StatefulWidget {
-  const DocumentsScreen({super.key});
+  /// True when reached straight after registration (no screen to pop back
+  /// to) — shows a "Continue to App" action so the worker isn't stranded
+  /// if they want to upload documents later instead of right away.
+  final bool isOnboarding;
+
+  const DocumentsScreen({super.key, this.isOnboarding = false});
 
   @override
   State<DocumentsScreen> createState() => _DocumentsScreenState();
@@ -291,6 +297,7 @@ class _DocumentsScreenState extends State<DocumentsScreen> {
     return Scaffold(
       appBar: AppBar(
         title: const Text('My Documents'),
+        automaticallyImplyLeading: !widget.isOnboarding,
         actions: [
           IconButton(
             icon: const Icon(Icons.refresh),
@@ -303,6 +310,15 @@ class _DocumentsScreenState extends State<DocumentsScreen> {
             },
             tooltip: 'Refresh',
           ),
+          if (widget.isOnboarding)
+            TextButton(
+              onPressed: () => Navigator.pushNamedAndRemoveUntil(
+                context,
+                AppRoutes.home,
+                (route) => false,
+              ),
+              child: const Text('Continue'),
+            ),
         ],
       ),
       body: _isLoading

@@ -131,6 +131,18 @@ class UpdateBookingLocationRequested extends BookingEvent {
   List<Object?> get props => [bookingId];
 }
 
+/// Event to generate/reveal the job-start or job-end OTP so the customer
+/// can read it aloud to the worker.
+class RevealJobOtpRequested extends BookingEvent {
+  final String bookingId;
+  final String purpose; // 'JOB_START' or 'JOB_END'
+
+  const RevealJobOtpRequested({required this.bookingId, required this.purpose});
+
+  @override
+  List<Object?> get props => [bookingId, purpose];
+}
+
 /// Event to trigger SOS
 class TriggerSOSRequested extends BookingEvent {
   final String? bookingId;

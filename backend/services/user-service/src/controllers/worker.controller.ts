@@ -121,6 +121,13 @@ export const updateAvailability = asyncHandler(async (req: Request, res: Respons
 /**
  * Add document
  * POST /api/users/worker/documents
+ *
+ * `type` is one of the fixed onboarding document ids the worker-app's
+ * documents screen uses ('cnic_front' | 'cnic_back' | 'profile_photo').
+ * Each maps to its own flat image + status field (rather than only the
+ * generic `documents[]` log) so admin review can approve/reject them
+ * independently. Re-uploading resets that one document back to 'pending'
+ * so a previously-rejected document re-enters review.
  */
 export const addDocument = asyncHandler(async (req: Request, res: Response) => {
   const userId = req.user!.id;
@@ -136,6 +143,23 @@ export const addDocument = asyncHandler(async (req: Request, res: Response) => {
     return notFoundResponse(res, 'Worker profile not found');
   }
 
+  switch (type) {
+    case 'cnic_front':
+      worker.cnicFrontImage = url;
+      worker.cnicFrontStatus = 'pending';
+      break;
+    case 'cnic_back':
+      worker.cnicBackImage = url;
+      worker.cnicBackStatus = 'pending';
+      break;
+    case 'profile_photo':
+      worker.profileImage = url;
+      worker.profilePhotoStatus = 'pending';
+      break;
+    default:
+      return errorResponse(res, 'Unknown document type', HTTP_STATUS.BAD_REQUEST);
+  }
+
   worker.documents.push({
     type,
     url,
@@ -145,7 +169,7 @@ export const addDocument = asyncHandler(async (req: Request, res: Response) => {
 
   await worker.save();
 
-  return successResponse(res, worker.documents, 'Document added successfully');
+  return successResponse(res, worker, 'Document uploaded successfully');
 });
 
 /**

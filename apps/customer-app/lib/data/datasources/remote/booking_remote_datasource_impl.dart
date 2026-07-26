@@ -1,5 +1,6 @@
 import 'package:dio/dio.dart';
 import '../../../core/error/exceptions.dart';
+import '../../../core/constants/api_endpoints.dart';
 import '../../models/booking_model.dart';
 import '../../models/worker_model.dart';
 import '../../../domain/repositories/booking_repository.dart';
@@ -257,6 +258,22 @@ class BookingRemoteDataSourceImpl implements BookingRemoteDataSource {
       final response = await _dio.post('/uploads', data: formData);
       final data = response.data['data'] ?? response.data;
       return data['url'] as String;
+    } on DioException catch (e) {
+      throw _handleDioError(e);
+    }
+  }
+
+  @override
+  Future<JobOtpResult> getJobOtp({
+    required String bookingId,
+    required String purpose,
+  }) async {
+    try {
+      final response = await _dio.get(
+        ApiEndpoints.jobOtp(bookingId),
+        queryParameters: {'purpose': purpose},
+      );
+      return JobOtpResult.fromJson(response.data);
     } on DioException catch (e) {
       throw _handleDioError(e);
     }

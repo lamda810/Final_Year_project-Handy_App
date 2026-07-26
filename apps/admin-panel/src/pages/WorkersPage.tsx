@@ -42,6 +42,8 @@ import {
 import { useQuery } from '@tanstack/react-query';
 import { usersApi } from '../services';
 
+type DocumentReviewStatus = 'pending' | 'verified' | 'rejected';
+
 interface Worker {
   _id: string;
   firstName: string;
@@ -50,6 +52,12 @@ interface Worker {
   phone: string;
   cnic: string;
   cnicVerified: boolean;
+  cnicFrontImage?: string;
+  cnicBackImage?: string;
+  cnicFrontStatus: DocumentReviewStatus;
+  cnicBackStatus: DocumentReviewStatus;
+  profilePhotoStatus: DocumentReviewStatus;
+  verificationNotes?: string;
   skills: Array<{
     category: string;
     experience: number;
@@ -90,6 +98,12 @@ export default function WorkersPage() {
   const [selectedWorker, setSelectedWorker] = useState<Worker | null>(null);
   const [viewDialogOpen, setViewDialogOpen] = useState(false);
   const [verifyDialogOpen, setVerifyDialogOpen] = useState(false);
+  const [verifyNotes, setVerifyNotes] = useState('');
+  const [docDecisions, setDocDecisions] = useState<{
+    cnicFront: DocumentReviewStatus;
+    cnicBack: DocumentReviewStatus;
+    profilePhoto: DocumentReviewStatus;
+  }>({ cnicFront: 'pending', cnicBack: 'pending', profilePhoto: 'pending' });
 
   const { data: workersData, isLoading, refetch } = useQuery({
     queryKey: ['workers', tabValue, page, rowsPerPage, searchQuery],
@@ -137,12 +151,24 @@ export default function WorkersPage() {
     handleMenuClose();
   };
 
+  const handleOpenVerifyDialog = () => {
+    setVerifyNotes('');
+    setDocDecisions({
+      cnicFront: selectedWorker?.cnicFrontStatus === 'rejected' ? 'rejected' : 'verified',
+      cnicBack: selectedWorker?.cnicBackStatus === 'rejected' ? 'rejected' : 'verified',
+      profilePhoto: selectedWorker?.profilePhotoStatus === 'rejected' ? 'rejected' : 'verified',
+    });
+    setVerifyDialogOpen(true);
+    handleMenuClose();
+  };
+
   const handleVerifyWorker = async (approve: boolean) => {
     if (selectedWorker) {
       try {
         await usersApi.verifyWorker(selectedWorker._id, {
           status: approve ? 'ACTIVE' : 'REJECTED',
-          notes: approve ? 'Approved by admin' : 'Rejected by admin',
+          notes: verifyNotes || (approve ? 'Approved by admin' : 'Rejected by admin'),
+          documentDecisions: docDecisions,
         });
         refetch();
       } catch (error) {
@@ -394,16 +420,10 @@ export default function WorkersPage() {
           View Details
         </MenuItem>
         {selectedWorker?.status === 'PENDING_VERIFICATION' && (
-          <>
-            <MenuItem onClick={() => { setVerifyDialogOpen(true); handleMenuClose(); }}>
-              <ApproveIcon sx={{ mr: 1 }} fontSize="small" color="success" />
-              Approve
-            </MenuItem>
-            <MenuItem onClick={() => { setVerifyDialogOpen(true); handleMenuClose(); }}>
-              <RejectIcon sx={{ mr: 1 }} fontSize="small" color="error" />
-              Reject
-            </MenuItem>
-          </>
+          <MenuItem onClick={handleOpenVerifyDialog}>
+            <ApproveIcon sx={{ mr: 1 }} fontSize="small" color="success" />
+            Review Verification
+          </MenuItem>
         )}
         {selectedWorker?.status === 'ACTIVE' && (
           <MenuItem onClick={handleMenuClose}>
@@ -449,6 +469,76 @@ export default function WorkersPage() {
                 </Typography>
 
                 <Typography variant="subtitle2" color="text.secondary" gutterBottom sx={{ mt: 3 }}>
+                  Verification Documents
+                </Typography>
+                <Grid container spacing={2} sx={{ mb: 2 }}>
+                  {(
+                    [
+                      { label: 'CNIC Front', url: selectedWorker.cnicFrontImage, status: selectedWorker.cnicFrontStatus },
+                      { label: 'CNIC Back', url: selectedWorker.cnicBackImage, status: selectedWorker.cnicBackStatus },
+                      { label: 'Profile Photo', url: selectedWorker.profileImage, status: selectedWorker.profilePhotoStatus },
+                    ] as const
+                  ).map((doc) => (
+                    <Grid size={{ xs: 12, sm: 4 }} key={doc.label}>
+                      <Box
+                        sx={{
+                          border: '1px solid',
+                          borderColor: 'divider',
+                          borderRadius: 1,
+                          overflow: 'hidden',
+                        }}
+                      >
+                        {doc.url ? (
+                          <Box
+                            component="img"
+                            src={doc.url}
+                            alt={doc.label}
+                            sx={{ width: '100%', height: 110, objectFit: 'cover', display: 'block' }}
+                          />
+                        ) : (
+                          <Box
+                            sx={{
+                              width: '100%',
+                              height: 110,
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              bgcolor: 'action.hover',
+                            }}
+                          >
+                            <Typography variant="caption" color="text.secondary">
+                              Not uploaded
+                            </Typography>
+                          </Box>
+                        )}
+                        <Box sx={{ p: 1 }}>
+                          <Typography variant="caption" display="block">
+                            {doc.label}
+                          </Typography>
+                          <Chip
+                            label={doc.status}
+                            size="small"
+                            color={
+                              doc.status === 'verified'
+                                ? 'success'
+                                : doc.status === 'rejected'
+                                ? 'error'
+                                : 'warning'
+                            }
+                            sx={{ mt: 0.5 }}
+                          />
+                        </Box>
+                      </Box>
+                    </Grid>
+                  ))}
+                </Grid>
+                {selectedWorker.verificationNotes && (
+                  <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+                    Admin notes: {selectedWorker.verificationNotes}
+                  </Typography>
+                )}
+
+                <Typography variant="subtitle2" color="text.secondary" gutterBottom sx={{ mt: 3 }}>
                   Skills
                 </Typography>
                 {selectedWorker.skills.map((skill, idx) => (
@@ -484,20 +574,62 @@ export default function WorkersPage() {
       </Dialog>
 
       {/* Verify Dialog */}
-      <Dialog open={verifyDialogOpen} onClose={() => setVerifyDialogOpen(false)}>
-        <DialogTitle>Verify Worker</DialogTitle>
+      <Dialog open={verifyDialogOpen} onClose={() => setVerifyDialogOpen(false)} maxWidth="sm" fullWidth>
+        <DialogTitle>Review Verification</DialogTitle>
         <DialogContent>
-          <Typography>
-            Do you want to approve or reject this worker's registration?
+          <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+            Approve or reject each document, then approve or reject the overall application.
           </Typography>
+          {(
+            [
+              { key: 'cnicFront' as const, label: 'CNIC Front' },
+              { key: 'cnicBack' as const, label: 'CNIC Back' },
+              { key: 'profilePhoto' as const, label: 'Profile Photo' },
+            ]
+          ).map((doc) => (
+            <Box
+              key={doc.key}
+              sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 1.5 }}
+            >
+              <Typography variant="body2">{doc.label}</Typography>
+              <Box sx={{ display: 'flex', gap: 1 }}>
+                <Button
+                  size="small"
+                  variant={docDecisions[doc.key] === 'verified' ? 'contained' : 'outlined'}
+                  color="success"
+                  onClick={() => setDocDecisions((d) => ({ ...d, [doc.key]: 'verified' }))}
+                >
+                  Verify
+                </Button>
+                <Button
+                  size="small"
+                  variant={docDecisions[doc.key] === 'rejected' ? 'contained' : 'outlined'}
+                  color="error"
+                  onClick={() => setDocDecisions((d) => ({ ...d, [doc.key]: 'rejected' }))}
+                >
+                  Reject
+                </Button>
+              </Box>
+            </Box>
+          ))}
+          <TextField
+            label="Notes for worker (optional)"
+            placeholder="e.g. CNIC back image is blurry, please re-upload"
+            multiline
+            minRows={2}
+            fullWidth
+            value={verifyNotes}
+            onChange={(e) => setVerifyNotes(e.target.value)}
+            sx={{ mt: 2 }}
+          />
         </DialogContent>
         <DialogActions>
           <Button onClick={() => setVerifyDialogOpen(false)}>Cancel</Button>
           <Button onClick={() => handleVerifyWorker(false)} color="error">
-            Reject
+            Reject Application
           </Button>
           <Button onClick={() => handleVerifyWorker(true)} variant="contained" color="success">
-            Approve
+            Approve Application
           </Button>
         </DialogActions>
       </Dialog>

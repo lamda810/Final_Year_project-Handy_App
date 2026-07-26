@@ -43,6 +43,11 @@ class ApiEndpoints {
   static String bookingLocation(String id) => '/bookings/worker/$id/location';
   static String bookingDetails(String id) => '/bookings/$id';
   static String bookingMessages(String id) => '/bookings/$id/messages';
+  static String bookingOffers(String id) => '/bookings/$id/offers';
+  static String acceptOffer(String bookingId, String offerId) =>
+      '/bookings/$bookingId/offers/$offerId/accept';
+  static String rejectOffer(String bookingId, String offerId) =>
+      '/bookings/$bookingId/offers/$offerId/reject';
 
   // Notification Endpoints
   static const String notifications = '/notifications';
@@ -54,4 +59,7 @@ class ApiEndpoints {
   // SOS Endpoints
   static const String triggerSos = '/sos/trigger';
   static String sosDetails(String id) => '/sos/$id';
+
+  // AI Assistant Endpoints
+  static const String chatbotAsk = '/matching/chatbot/ask';
 }

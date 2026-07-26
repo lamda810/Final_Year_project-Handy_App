@@ -68,4 +68,9 @@ abstract class BookingRemoteDataSource {
 
   /// Upload a local image file and return its server-hosted URL.
   Future<String> uploadImage(String filePath);
+
+  Future<JobOtpResult> getJobOtp({
+    required String bookingId,
+    required String purpose,
+  });
 }

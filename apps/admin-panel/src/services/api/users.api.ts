@@ -34,6 +34,12 @@ const mapWorker = (doc: any) => {
     phone: user.phone ?? '',
     cnic: doc.cnic ?? '',
     cnicVerified: doc.cnicVerified ?? false,
+    cnicFrontImage: doc.cnicFrontImage,
+    cnicBackImage: doc.cnicBackImage,
+    cnicFrontStatus: doc.cnicFrontStatus ?? 'pending',
+    cnicBackStatus: doc.cnicBackStatus ?? 'pending',
+    profilePhotoStatus: doc.profilePhotoStatus ?? 'pending',
+    verificationNotes: doc.verificationNotes,
     skills: Array.isArray(doc.skills) ? doc.skills : [],
     rating: doc.rating ?? { average: 0, count: 0 },
     trustScore: doc.trustScore ?? 0,
@@ -90,7 +96,15 @@ export const usersApi = {
 
   verifyWorker: async (
     workerId: string,
-    data: { status: string; notes?: string },
+    data: {
+      status: string;
+      notes?: string;
+      documentDecisions?: {
+        cnicFront?: 'verified' | 'rejected';
+        cnicBack?: 'verified' | 'rejected';
+        profilePhoto?: 'verified' | 'rejected';
+      };
+    },
   ) => {
     const response = await apiRequest<any>(`/users/admin/workers/${workerId}/verify`, {
       method: 'PUT',

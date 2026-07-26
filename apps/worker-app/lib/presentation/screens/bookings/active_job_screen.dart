@@ -110,12 +110,24 @@ class _ActiveJobScreenState extends State<ActiveJobScreen> {
   }
 
   Future<void> _startJob() async {
+    final otpCode = await showDialog<String>(
+      context: context,
+      builder: (context) => const _OtpEntryDialog(
+        title: 'Start Job',
+        instructions: 'Ask the customer for the 6-digit code shown in their app to confirm you have arrived.',
+      ),
+    );
+    if (otpCode == null) return;
+
     setState(() {
       _isProcessing = true;
     });
 
     try {
-      final booking = await _repository.startBooking(widget.bookingId);
+      final booking = await _repository.startBooking(
+        widget.bookingId,
+        otpCode: otpCode,
+      );
       setState(() {
         _booking = booking;
         _isProcessing = false;
@@ -136,8 +148,10 @@ class _ActiveJobScreenState extends State<ActiveJobScreen> {
       });
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Failed to start job'),
+          SnackBar(
+            content: Text(
+              'Failed to start job: ${e.toString().replaceAll('Exception: ', '')}',
+            ),
             backgroundColor: AppColors.error,
           ),
         );
@@ -154,6 +168,16 @@ class _ActiveJobScreenState extends State<ActiveJobScreen> {
     );
 
     if (confirmed != true) return;
+    if (!mounted) return;
+
+    final otpCode = await showDialog<String>(
+      context: context,
+      builder: (context) => const _OtpEntryDialog(
+        title: 'Complete Job',
+        instructions: 'Ask the customer for the 6-digit code shown in their app to confirm the job is done.',
+      ),
+    );
+    if (otpCode == null) return;
 
     setState(() {
       _isProcessing = true;
@@ -163,7 +187,7 @@ class _ActiveJobScreenState extends State<ActiveJobScreen> {
       // Price was already decided at booking creation — the worker no
       // longer enters a final amount here; the backend uses the
       // booking's estimatedPrice when finalPrice is omitted.
-      await _repository.completeBooking(widget.bookingId);
+      await _repository.completeBooking(widget.bookingId, otpCode: otpCode);
 
       _durationTimer?.cancel();
       _locationService.stopActiveJobTracking(resumeIdle: true);
@@ -577,6 +601,84 @@ class _CompleteJobDialog extends StatelessWidget {
         ElevatedButton(
           onPressed: () => Navigator.pop(context, true),
           child: const Text('Complete'),
+        ),
+      ],
+    );
+  }
+}
+
+/// Prompts the worker to enter the 6-digit dummy OTP the customer reads
+/// aloud, used to confirm both job start and job end.
+class _OtpEntryDialog extends StatefulWidget {
+  final String title;
+  final String instructions;
+
+  const _OtpEntryDialog({required this.title, required this.instructions});
+
+  @override
+  State<_OtpEntryDialog> createState() => _OtpEntryDialogState();
+}
+
+class _OtpEntryDialogState extends State<_OtpEntryDialog> {
+  final _controller = TextEditingController();
+  final _formKey = GlobalKey<FormState>();
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: Text(widget.title),
+      content: Form(
+        key: _formKey,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              widget.instructions,
+              style: TextStyle(
+                color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.7),
+              ),
+            ),
+            const SizedBox(height: AppSpacing.md),
+            TextFormField(
+              controller: _controller,
+              autofocus: true,
+              keyboardType: TextInputType.number,
+              maxLength: 6,
+              textAlign: TextAlign.center,
+              style: const TextStyle(fontSize: 24, letterSpacing: 8, fontWeight: FontWeight.bold),
+              decoration: const InputDecoration(
+                counterText: '',
+                hintText: '000000',
+              ),
+              validator: (value) {
+                if (value == null || value.trim().length != 6) {
+                  return 'Enter the 6-digit code';
+                }
+                return null;
+              },
+            ),
+          ],
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: const Text('Cancel'),
+        ),
+        ElevatedButton(
+          onPressed: () {
+            if (_formKey.currentState!.validate()) {
+              Navigator.pop(context, _controller.text.trim());
+            }
+          },
+          child: const Text('Confirm'),
         ),
       ],
     );

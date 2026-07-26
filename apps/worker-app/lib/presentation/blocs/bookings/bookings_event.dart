@@ -33,23 +33,28 @@ class BookingRejected extends BookingsEvent {
   List<Object?> get props => [bookingId, reason];
 }
 
-/// Start working on an accepted booking.
+/// Start working on an accepted booking. [otpCode] is the code the
+/// customer reads aloud to the worker, verified server-side.
 class BookingStarted extends BookingsEvent {
   final String bookingId;
+  final String otpCode;
   final List<String>? beforeImages;
-  const BookingStarted(this.bookingId, {this.beforeImages});
+  const BookingStarted(this.bookingId, {required this.otpCode, this.beforeImages});
   @override
-  List<Object?> get props => [bookingId, beforeImages];
+  List<Object?> get props => [bookingId, otpCode, beforeImages];
 }
 
-/// Complete a booking.
+/// Complete a booking. [otpCode] is the code the customer reads aloud to
+/// the worker, verified server-side.
 class BookingCompleted extends BookingsEvent {
   final String bookingId;
+  final String otpCode;
   final List<String>? afterImages;
   final double? finalPrice;
   final double? materialsCost;
   const BookingCompleted(
     this.bookingId, {
+    required this.otpCode,
     this.afterImages,
     this.finalPrice,
     this.materialsCost,
@@ -57,6 +62,7 @@ class BookingCompleted extends BookingsEvent {
   @override
   List<Object?> get props => [
     bookingId,
+    otpCode,
     afterImages,
     finalPrice,
     materialsCost,

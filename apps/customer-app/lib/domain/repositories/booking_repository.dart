@@ -209,6 +209,27 @@ class SOSTriggerResult {
   }
 }
 
+/// Job-start/job-end OTP the customer reads aloud to the worker
+class JobOtpResult {
+  final String code;
+  final String purpose;
+  final DateTime expiresAt;
+
+  JobOtpResult({required this.code, required this.purpose, required this.expiresAt});
+
+  factory JobOtpResult.fromJson(Map<String, dynamic> json) {
+    final dynamic rawData = json['data'];
+    final Map<String, dynamic> source = (rawData is Map)
+        ? Map<String, dynamic>.from(rawData)
+        : json;
+    return JobOtpResult(
+      code: source['code'] ?? '',
+      purpose: source['purpose'] ?? 'JOB_START',
+      expiresAt: DateTime.tryParse(source['expiresAt'] ?? '') ?? DateTime.now(),
+    );
+  }
+}
+
 /// Abstract booking repository interface
 abstract class BookingRepository {
   /// Analyze problem description using AI
@@ -285,5 +306,12 @@ abstract class BookingRepository {
   Future<int> estimateDuration({
     required String serviceCategory,
     required String problemDescription,
+  });
+
+  /// Generate/reveal the job-start or job-end OTP for the customer to read
+  /// aloud to the worker. [purpose] is 'JOB_START' or 'JOB_END'.
+  Future<JobOtpResult> getJobOtp({
+    required String bookingId,
+    required String purpose,
   });
 }

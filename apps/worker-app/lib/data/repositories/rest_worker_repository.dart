@@ -72,17 +72,32 @@ class RestWorkerRepository implements WorkerRepository {
     return (data['isAvailable'] as bool?) ?? isAvailable;
   }
 
+  /// Uploads the local file to the generic file-storage endpoint (the same
+  /// one customer-app uses for booking photos) and returns its public URL.
+  Future<String> _uploadFile(String filePath) async {
+    final formData = FormData.fromMap({
+      'image': await MultipartFile.fromFile(filePath),
+    });
+    final response = await _dio.post('/uploads', data: formData);
+    final data = response.data['data'] ?? response.data;
+    return data['url'] as String;
+  }
+
   @override
   Future<String> uploadDocument(String type, String filePath) async {
-    // TODO: The backend's POST /users/worker/documents expects a hosted
-    // {type, url} — there is no file storage endpoint yet to upload to.
-    throw UnsupportedError('Document upload is not available yet');
+    final url = await _uploadFile(filePath);
+    await _dio.post(ApiEndpoints.uploadDocuments, data: {'type': type, 'url': url});
+    return url;
   }
 
   @override
   Future<String> uploadProfileImage(String filePath) async {
-    // TODO: No backend storage endpoint exists yet for profile images.
-    throw UnsupportedError('Profile photo upload is not available yet');
+    final url = await _uploadFile(filePath);
+    await _dio.post(
+      ApiEndpoints.uploadDocuments,
+      data: {'type': 'profile_photo', 'url': url},
+    );
+    return url;
   }
 
   @override

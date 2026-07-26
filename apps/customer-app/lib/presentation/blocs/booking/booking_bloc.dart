@@ -21,6 +21,7 @@ class BookingBloc extends Bloc<BookingEvent, BookingState> {
     on<SubmitRatingRequested>(_onSubmitRating);
     on<UpdateBookingLocationRequested>(_onUpdateBookingLocation);
     on<TriggerSOSRequested>(_onTriggerSOS);
+    on<RevealJobOtpRequested>(_onRevealJobOtp);
   }
 
   Future<void> _onAnalyzeProblem(
@@ -241,6 +242,27 @@ class BookingBloc extends Bloc<BookingEvent, BookingState> {
         lng: event.lng,
       );
       emit(SOSTriggered(sosId: result.sosId, priority: result.priority));
+    } catch (e) {
+      emit(BookingError(message: ErrorMapper.toUserMessage(e)));
+    }
+  }
+
+  Future<void> _onRevealJobOtp(
+    RevealJobOtpRequested event,
+    Emitter<BookingState> emit,
+  ) async {
+    try {
+      final result = await _bookingRepository.getJobOtp(
+        bookingId: event.bookingId,
+        purpose: event.purpose,
+      );
+      emit(
+        JobOtpRevealed(
+          code: result.code,
+          purpose: result.purpose,
+          expiresAt: result.expiresAt,
+        ),
+      );
     } catch (e) {
       emit(BookingError(message: ErrorMapper.toUserMessage(e)));
     }
