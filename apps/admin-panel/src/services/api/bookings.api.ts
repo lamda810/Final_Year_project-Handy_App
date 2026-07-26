@@ -108,10 +108,10 @@ export const bookingsApi = {
           month: item._id,
           revenue: item.revenue ?? 0,
         })),
-        categoryDistribution: categoryBreakdown.map((item: any, index: number) => ({
+        categoryDistribution: categoryBreakdown.map((item: any) => ({
           name: item._id ?? 'Unknown',
           value: item.count ?? 0,
-          color: ['#2196F3', '#4CAF50', '#FF9800', '#9C27B0', '#795548'][index % 5],
+          revenue: item.revenue ?? 0,
         })),
         recentBookings: recentBookings.map((booking) => ({
           id: booking.bookingNumber,
