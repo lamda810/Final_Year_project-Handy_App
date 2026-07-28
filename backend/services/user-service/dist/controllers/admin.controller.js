@@ -1,4 +1,4 @@
-import { Customer, Worker, User, Notification, asyncHandler, successResponse, errorResponse, notFoundResponse, paginatedResponse, HTTP_STATUS, DEFAULTS, } from '@handy-go/shared';
+import { Customer, Worker, User, Notification, Withdrawal, asyncHandler, successResponse, createdResponse, errorResponse, notFoundResponse, conflictResponse, paginatedResponse, normalizePhoneNumber, normalizeCNIC, HTTP_STATUS, DEFAULTS, } from '@handy-go/shared';
 /**
  * Get all customers (paginated)
  * GET /api/users/admin/customers
@@ -34,6 +34,50 @@ export const getCustomers = asyncHandler(async (req, res) => {
         filteredCustomers = customers.filter((c) => !c.user?.isActive);
     }
     return paginatedResponse(res, filteredCustomers, page, limit, total, 'Customers retrieved');
+});
+/**
+ * Create a worker directly (admin-added, bypasses phone-OTP registration)
+ * POST /api/users/admin/workers
+ */
+export const createWorker = asyncHandler(async (req, res) => {
+    const { firstName, lastName, email, password, skills, status } = req.body;
+    const phone = normalizePhoneNumber(req.body.phone);
+    const cnic = normalizeCNIC(req.body.cnic);
+    const existingUser = await User.findOne({ phone });
+    if (existingUser) {
+        return conflictResponse(res, 'An account with this phone number already exists');
+    }
+    const cnicExists = await Worker.findByCNIC(cnic);
+    if (cnicExists) {
+        return conflictResponse(res, 'An account with this CNIC already exists');
+    }
+    if (email) {
+        const emailExists = await User.findOne({ email: email.toLowerCase() });
+        if (emailExists) {
+            return conflictResponse(res, 'An account with this email already exists');
+        }
+    }
+    const user = await User.create({
+        phone,
+        email: email?.toLowerCase(),
+        password,
+        role: 'WORKER',
+        isVerified: true,
+    });
+    const workerStatus = status || 'PENDING_VERIFICATION';
+    const worker = await Worker.create({
+        user: user._id,
+        firstName,
+        lastName,
+        cnic,
+        skills: skills.map((skill) => ({
+            ...skill,
+            isVerified: workerStatus === 'ACTIVE',
+        })),
+        cnicVerified: workerStatus === 'ACTIVE',
+        status: workerStatus,
+    });
+    return createdResponse(res, worker, 'Worker created successfully');
 });
 /**
  * Get all workers (paginated)
@@ -178,5 +222,107 @@ export const getUserDetails = asyncHandler(async (req, res) => {
         profile = await Worker.findOne({ user: userId });
     }
     return successResponse(res, { user, profile }, 'User details retrieved');
+});
+/**
+ * Get withdrawal requests (paginated, filterable by status)
+ * GET /api/users/admin/withdrawals
+ */
+export const getWithdrawals = asyncHandler(async (req, res) => {
+    const page = parseInt(req.query.page) || 1;
+    const limit = Math.min(parseInt(req.query.limit) || DEFAULTS.PAGINATION_LIMIT, DEFAULTS.MAX_PAGINATION_LIMIT);
+    const status = req.query.status;
+    const query = {};
+    if (status)
+        query.status = status;
+    const skip = (page - 1) * limit;
+    const [withdrawals, total] = await Promise.all([
+        Withdrawal.find(query)
+            .populate({
+            path: 'worker',
+            select: 'firstName lastName contactPhone user',
+            populate: { path: 'user', select: 'phone email' },
+        })
+            .sort({ createdAt: -1 })
+            .skip(skip)
+            .limit(limit),
+        Withdrawal.countDocuments(query),
+    ]);
+    return paginatedResponse(res, withdrawals, page, limit, total, 'Withdrawals retrieved');
+});
+/**
+ * Get withdrawal stats for the admin dashboard cards
+ * GET /api/users/admin/withdrawals/stats
+ */
+export const getWithdrawalStats = asyncHandler(async (_req, res) => {
+    const [pending, approved, rejected, paid] = await Promise.all([
+        Withdrawal.countDocuments({ status: 'PENDING' }),
+        Withdrawal.countDocuments({ status: 'APPROVED' }),
+        Withdrawal.countDocuments({ status: 'REJECTED' }),
+        Withdrawal.countDocuments({ status: 'PAID' }),
+    ]);
+    const pendingAmountResult = await Withdrawal.aggregate([
+        { $match: { status: { $in: ['PENDING', 'APPROVED'] } } },
+        { $group: { _id: null, total: { $sum: '$amount' } } },
+    ]);
+    const paidAmountResult = await Withdrawal.aggregate([
+        { $match: { status: 'PAID' } },
+        { $group: { _id: null, total: { $sum: '$amount' } } },
+    ]);
+    return successResponse(res, {
+        pending,
+        approved,
+        rejected,
+        paid,
+        pendingAmount: pendingAmountResult[0]?.total ?? 0,
+        paidAmount: paidAmountResult[0]?.total ?? 0,
+    }, 'Withdrawal stats retrieved');
+});
+/**
+ * Review a withdrawal request (approve/reject/mark paid)
+ * PUT /api/users/admin/withdrawals/:withdrawalId/review
+ */
+export const reviewWithdrawal = asyncHandler(async (req, res) => {
+    const adminId = req.user.id;
+    const { withdrawalId } = req.params;
+    const { status, notes } = req.body;
+    const withdrawal = await Withdrawal.findById(withdrawalId);
+    if (!withdrawal) {
+        return notFoundResponse(res, 'Withdrawal request not found');
+    }
+    const validTransitions = {
+        PENDING: ['APPROVED', 'REJECTED'],
+        APPROVED: ['PAID', 'REJECTED'],
+    };
+    const allowedNext = validTransitions[withdrawal.status] ?? [];
+    if (!allowedNext.includes(status)) {
+        return errorResponse(res, `Cannot move a ${withdrawal.status} withdrawal to ${status}`, HTTP_STATUS.BAD_REQUEST);
+    }
+    withdrawal.status = status;
+    withdrawal.adminNotes = notes || undefined;
+    withdrawal.processedBy = adminId;
+    withdrawal.processedAt = new Date();
+    withdrawal.timeline.push({
+        status,
+        timestamp: new Date(),
+        note: notes,
+        performedBy: adminId,
+    });
+    await withdrawal.save();
+    const worker = await Worker.findById(withdrawal.worker);
+    if (worker) {
+        const statusText = status === 'APPROVED' ? 'approved and is being processed'
+            : status === 'PAID' ? 'has been paid out'
+                : 'was rejected';
+        await Notification.create({
+            recipient: worker.user,
+            type: 'PAYMENT',
+            title: 'Withdrawal update',
+            body: notes
+                ? `Your withdrawal request of Rs. ${withdrawal.amount} ${statusText}. Note: ${notes}`
+                : `Your withdrawal request of Rs. ${withdrawal.amount} ${statusText}.`,
+            data: { action: 'WITHDRAWAL_STATUS', withdrawalId: withdrawal._id.toString(), status },
+        });
+    }
+    return successResponse(res, withdrawal, `Withdrawal ${status.toLowerCase()} successfully`);
 });
 //# sourceMappingURL=admin.controller.js.map

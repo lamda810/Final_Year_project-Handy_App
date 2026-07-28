@@ -4,6 +4,7 @@ import {
   Worker,
   User,
   Notification,
+  Withdrawal,
   asyncHandler,
   successResponse,
   createdResponse,
@@ -281,4 +282,129 @@ export const getUserDetails = asyncHandler(async (req: Request, res: Response) =
   }
 
   return successResponse(res, { user, profile }, 'User details retrieved');
+});
+
+/**
+ * Get withdrawal requests (paginated, filterable by status)
+ * GET /api/users/admin/withdrawals
+ */
+export const getWithdrawals = asyncHandler(async (req: Request, res: Response) => {
+  const page = parseInt(req.query.page as string) || 1;
+  const limit = Math.min(parseInt(req.query.limit as string) || DEFAULTS.PAGINATION_LIMIT, DEFAULTS.MAX_PAGINATION_LIMIT);
+  const status = req.query.status as string;
+
+  const query: Record<string, unknown> = {};
+  if (status) query.status = status;
+
+  const skip = (page - 1) * limit;
+
+  const [withdrawals, total] = await Promise.all([
+    Withdrawal.find(query)
+      .populate({
+        path: 'worker',
+        select: 'firstName lastName contactPhone user',
+        populate: { path: 'user', select: 'phone email' },
+      })
+      .sort({ createdAt: -1 })
+      .skip(skip)
+      .limit(limit),
+    Withdrawal.countDocuments(query),
+  ]);
+
+  return paginatedResponse(res, withdrawals, page, limit, total, 'Withdrawals retrieved');
+});
+
+/**
+ * Get withdrawal stats for the admin dashboard cards
+ * GET /api/users/admin/withdrawals/stats
+ */
+export const getWithdrawalStats = asyncHandler(async (_req: Request, res: Response) => {
+  const [pending, approved, rejected, paid] = await Promise.all([
+    Withdrawal.countDocuments({ status: 'PENDING' }),
+    Withdrawal.countDocuments({ status: 'APPROVED' }),
+    Withdrawal.countDocuments({ status: 'REJECTED' }),
+    Withdrawal.countDocuments({ status: 'PAID' }),
+  ]);
+
+  const pendingAmountResult = await Withdrawal.aggregate([
+    { $match: { status: { $in: ['PENDING', 'APPROVED'] } } },
+    { $group: { _id: null, total: { $sum: '$amount' } } },
+  ]);
+  const paidAmountResult = await Withdrawal.aggregate([
+    { $match: { status: 'PAID' } },
+    { $group: { _id: null, total: { $sum: '$amount' } } },
+  ]);
+
+  return successResponse(
+    res,
+    {
+      pending,
+      approved,
+      rejected,
+      paid,
+      pendingAmount: pendingAmountResult[0]?.total ?? 0,
+      paidAmount: paidAmountResult[0]?.total ?? 0,
+    },
+    'Withdrawal stats retrieved'
+  );
+});
+
+/**
+ * Review a withdrawal request (approve/reject/mark paid)
+ * PUT /api/users/admin/withdrawals/:withdrawalId/review
+ */
+export const reviewWithdrawal = asyncHandler(async (req: Request, res: Response) => {
+  const adminId = req.user!.id;
+  const { withdrawalId } = req.params;
+  const { status, notes } = req.body;
+
+  const withdrawal = await Withdrawal.findById(withdrawalId);
+  if (!withdrawal) {
+    return notFoundResponse(res, 'Withdrawal request not found');
+  }
+
+  const validTransitions: Record<string, string[]> = {
+    PENDING: ['APPROVED', 'REJECTED'],
+    APPROVED: ['PAID', 'REJECTED'],
+  };
+  const allowedNext = validTransitions[withdrawal.status] ?? [];
+  if (!allowedNext.includes(status)) {
+    return errorResponse(
+      res,
+      `Cannot move a ${withdrawal.status} withdrawal to ${status}`,
+      HTTP_STATUS.BAD_REQUEST
+    );
+  }
+
+  withdrawal.status = status;
+  withdrawal.adminNotes = notes || undefined;
+  withdrawal.processedBy = adminId as any;
+  withdrawal.processedAt = new Date();
+  withdrawal.timeline.push({
+    status,
+    timestamp: new Date(),
+    note: notes,
+    performedBy: adminId as any,
+  });
+
+  await withdrawal.save();
+
+  const worker = await Worker.findById(withdrawal.worker);
+  if (worker) {
+    const statusText =
+      status === 'APPROVED' ? 'approved and is being processed'
+      : status === 'PAID' ? 'has been paid out'
+      : 'was rejected';
+    await Notification.create({
+      recipient: worker.user,
+      type: 'PAYMENT',
+      title: 'Withdrawal update',
+      body: notes
+        ? `Your withdrawal request of Rs. ${withdrawal.amount} ${statusText}. Note: ${notes}`
+        : `Your withdrawal request of Rs. ${withdrawal.amount} ${statusText}.`,
+      data: { action: 'WITHDRAWAL_STATUS', withdrawalId: withdrawal._id.toString(), status },
+    });
+  }
+
+  return successResponse(res, withdrawal, `Withdrawal ${status.toLowerCase()} successfully`);
 });

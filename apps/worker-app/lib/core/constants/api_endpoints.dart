@@ -31,6 +31,7 @@ class ApiEndpoints {
   static const String updateAvailability = '/users/worker/availability';
   static const String uploadDocuments = '/users/worker/documents';
   static const String workerEarnings = '/users/worker/earnings';
+  static const String workerWithdrawals = '/users/worker/withdrawals';
 
   // Booking Endpoints
   // Worker actions live under /bookings/worker/... on the booking service.

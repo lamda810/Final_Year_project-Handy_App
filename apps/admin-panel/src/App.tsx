@@ -9,6 +9,7 @@ import BookingsPage from './pages/BookingsPage';
 import SOSPage from './pages/SOSPage';
 import SettingsPage from './pages/SettingsPage';
 import PaymentsPage from './pages/PaymentsPage';
+import WithdrawalsPage from './pages/WithdrawalsPage';
 import AnalyticsPage from './pages/AnalyticsPage';
 import NotificationsPage from './pages/NotificationsPage';
 
@@ -38,6 +39,7 @@ function App() {
                 <Route path="/customers" element={<CustomersPage />} />
                 <Route path="/bookings" element={<BookingsPage />} />
                 <Route path="/payments" element={<PaymentsPage />} />
+                <Route path="/withdrawals" element={<WithdrawalsPage />} />
                 <Route path="/analytics" element={<AnalyticsPage />} />
                 <Route path="/notifications" element={<NotificationsPage />} />
                 <Route path="/sos" element={<SOSPage />} />

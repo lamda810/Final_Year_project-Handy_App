@@ -55,6 +55,10 @@ export const SOS_PRIORITY_OBJ = {
 };
 // SOS Status
 export const SOS_STATUS = ['ACTIVE', 'RESOLVED', 'ESCALATED', 'FALSE_ALARM'];
+// Withdrawal Status
+export const WITHDRAWAL_STATUS = ['PENDING', 'APPROVED', 'REJECTED', 'PAID'];
+// Minimum amount a worker may withdraw in a single request (PKR)
+export const MIN_WITHDRAWAL_AMOUNT = 500;
 // OTP Purposes
 export const OTP_PURPOSES = ['REGISTRATION', 'LOGIN', 'PASSWORD_RESET', 'JOB_START', 'JOB_END'];
 // Notification Types

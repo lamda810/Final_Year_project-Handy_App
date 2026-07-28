@@ -7,6 +7,7 @@ import {
   updateLocationSchema,
   updateAvailabilitySchema,
   addDocumentSchema,
+  requestWithdrawalSchema,
 } from '../validators/user.validators.js';
 
 const router: IRouter = Router();
@@ -56,5 +57,19 @@ router.post('/documents', validate(addDocumentSchema), workerController.addDocum
  * @access  Private (Worker)
  */
 router.get('/earnings', workerController.getEarnings);
+
+/**
+ * @route   POST /api/users/worker/withdrawals
+ * @desc    Request a withdrawal to the worker's bank account
+ * @access  Private (Worker)
+ */
+router.post('/withdrawals', validate(requestWithdrawalSchema), workerController.requestWithdrawal);
+
+/**
+ * @route   GET /api/users/worker/withdrawals
+ * @desc    Get the worker's withdrawal history and available balance
+ * @access  Private (Worker)
+ */
+router.get('/withdrawals', workerController.getWithdrawals);
 
 export default router;

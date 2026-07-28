@@ -1,4 +1,4 @@
-import { Worker, User, Booking, asyncHandler, successResponse, errorResponse, notFoundResponse, HTTP_STATUS, } from '@handy-go/shared';
+import { Worker, User, Booking, Withdrawal, asyncHandler, successResponse, errorResponse, notFoundResponse, HTTP_STATUS, MIN_WITHDRAWAL_AMOUNT, } from '@handy-go/shared';
 /**
  * Get worker profile
  * GET /api/users/worker/profile
@@ -176,5 +176,65 @@ export const getEarnings = asyncHandler(async (req, res) => {
         bookingsCount: bookings.length,
         breakdown,
     }, 'Earnings retrieved successfully');
+});
+/**
+ * Compute a worker's withdrawable balance: net earnings from completed
+ * bookings, minus anything already paid out or currently tied up in a
+ * pending/approved (not yet paid) withdrawal request.
+ */
+const calculateAvailableBalance = async (workerId) => {
+    const bookings = await Booking.find({ worker: workerId, status: 'COMPLETED' }).select('pricing');
+    const netEarnings = bookings.reduce((sum, booking) => sum + (booking.pricing.finalPrice || 0) - (booking.pricing.platformFee || 0), 0);
+    const reserved = await Withdrawal.aggregate([
+        { $match: { worker: workerId, status: { $in: ['PENDING', 'APPROVED', 'PAID'] } } },
+        { $group: { _id: null, total: { $sum: '$amount' } } },
+    ]);
+    const alreadyWithdrawnOrReserved = reserved[0]?.total ?? 0;
+    return Math.max(0, netEarnings - alreadyWithdrawnOrReserved);
+};
+/**
+ * Request a withdrawal
+ * POST /api/users/worker/withdrawals
+ */
+export const requestWithdrawal = asyncHandler(async (req, res) => {
+    const userId = req.user.id;
+    const { amount } = req.body;
+    const worker = await Worker.findOne({ user: userId });
+    if (!worker) {
+        return notFoundResponse(res, 'Worker profile not found');
+    }
+    if (!worker.bankDetails?.accountNumber) {
+        return errorResponse(res, 'Please add your bank details to your profile before requesting a withdrawal', HTTP_STATUS.BAD_REQUEST);
+    }
+    if (amount < MIN_WITHDRAWAL_AMOUNT) {
+        return errorResponse(res, `Minimum withdrawal amount is Rs. ${MIN_WITHDRAWAL_AMOUNT}`, HTTP_STATUS.BAD_REQUEST);
+    }
+    const availableBalance = await calculateAvailableBalance(worker._id);
+    if (amount > availableBalance) {
+        return errorResponse(res, `Withdrawal amount exceeds available balance (Rs. ${availableBalance})`, HTTP_STATUS.BAD_REQUEST);
+    }
+    const withdrawal = await Withdrawal.create({
+        worker: worker._id,
+        amount,
+        bankDetails: worker.bankDetails,
+        status: 'PENDING',
+    });
+    return successResponse(res, withdrawal, 'Withdrawal request submitted successfully', HTTP_STATUS.CREATED);
+});
+/**
+ * Get the authenticated worker's withdrawal history + current balance
+ * GET /api/users/worker/withdrawals
+ */
+export const getWithdrawals = asyncHandler(async (req, res) => {
+    const userId = req.user.id;
+    const worker = await Worker.findOne({ user: userId });
+    if (!worker) {
+        return notFoundResponse(res, 'Worker profile not found');
+    }
+    const [withdrawals, availableBalance] = await Promise.all([
+        Withdrawal.find({ worker: worker._id }).sort({ createdAt: -1 }),
+        calculateAvailableBalance(worker._id),
+    ]);
+    return successResponse(res, { withdrawals, availableBalance }, 'Withdrawals retrieved successfully');
 });
 //# sourceMappingURL=worker.controller.js.map

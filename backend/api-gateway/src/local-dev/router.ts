@@ -16,6 +16,7 @@ type WorkerStatus = 'PENDING_VERIFICATION' | 'ACTIVE' | 'SUSPENDED' | 'REJECTED'
 type SOSPriority = 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL';
 type SOSStatus = 'ACTIVE' | 'RESOLVED' | 'ESCALATED' | 'FALSE_ALARM';
 type OTTPurpose = 'REGISTRATION' | 'LOGIN' | 'PASSWORD_RESET';
+type WithdrawalStatus = 'PENDING' | 'APPROVED' | 'REJECTED' | 'PAID';
 
 interface DevUser {
   id: string;
@@ -94,6 +95,22 @@ interface DevWorker {
   totalJobsCompleted: number;
   status: WorkerStatus;
   createdAt: string;
+  bankDetails?: {
+    accountTitle: string;
+    accountNumber: string;
+    bankName: string;
+  };
+}
+
+interface DevWithdrawal {
+  _id: string;
+  worker: string;
+  amount: number;
+  bankDetails: { accountTitle: string; accountNumber: string; bankName: string };
+  status: WithdrawalStatus;
+  adminNotes?: string;
+  createdAt: string;
+  updatedAt: string;
 }
 
 interface DevBooking {
@@ -301,6 +318,7 @@ const workers: DevWorker[] = [
     totalJobsCompleted: 58,
     status: 'ACTIVE',
     createdAt: daysAgo(22),
+    bankDetails: { accountTitle: 'Umer Shah', accountNumber: '01234567890123', bankName: 'HBL' },
   },
   {
     _id: 'worker-2',
@@ -428,6 +446,35 @@ const sosAlerts: DevSOS[] = [
     createdAt: hoursAgo(9),
   },
 ];
+
+const withdrawals: DevWithdrawal[] = [
+  {
+    _id: 'withdrawal-1',
+    worker: 'worker-1',
+    amount: 3000,
+    bankDetails: workers[0]!.bankDetails!,
+    status: 'PAID',
+    createdAt: daysAgo(10),
+    updatedAt: daysAgo(9),
+  },
+];
+
+const MIN_WITHDRAWAL_AMOUNT = 500;
+
+const calculateWorkerAvailableBalance = (worker: DevWorker) => {
+  const relatedBookings = bookings.filter(
+    (booking) => booking.worker?._id === worker._id && booking.status === 'COMPLETED',
+  );
+  const netEarnings = relatedBookings.reduce(
+    (sum, booking) =>
+      sum + (booking.pricing.finalPrice ?? booking.pricing.estimatedPrice ?? 0) - (booking.pricing.platformFee ?? 0),
+    0,
+  );
+  const reserved = withdrawals
+    .filter((item) => item.worker === worker._id && ['PENDING', 'APPROVED', 'PAID'].includes(item.status))
+    .reduce((sum, item) => sum + item.amount, 0);
+  return Math.max(0, netEarnings - reserved);
+};
 
 const localSettings = {
   general: {
@@ -585,7 +632,7 @@ const buildWorkerProfileResponse = (worker: DevWorker) => ({
   trustScore: worker.trustScore,
   totalJobsCompleted: worker.totalJobsCompleted,
   totalEarnings: worker.totalJobsCompleted * 1250,
-  bankDetails: null,
+  bankDetails: worker.bankDetails ?? null,
   status: worker.status,
   createdAt: worker.createdAt,
   updatedAt: new Date().toISOString(),
@@ -1167,6 +1214,131 @@ export const createLocalDevProtectedRouter = (): ReturnType<typeof Router> => {
       },
       'Worker earnings retrieved',
     );
+  });
+
+  router.get('/api/users/worker/withdrawals', (req: Request, res: Response) => {
+    const worker = getAuthenticatedWorker(req);
+    if (!worker) {
+      return errorResponse(res, 'Worker profile not found', 404);
+    }
+
+    const items = withdrawals
+      .filter((item) => item.worker === worker._id)
+      .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+
+    return successResponse(
+      res,
+      { withdrawals: items, availableBalance: calculateWorkerAvailableBalance(worker) },
+      'Withdrawals retrieved',
+    );
+  });
+
+  router.post('/api/users/worker/withdrawals', (req: Request, res: Response) => {
+    const worker = getAuthenticatedWorker(req);
+    if (!worker) {
+      return errorResponse(res, 'Worker profile not found', 404);
+    }
+
+    if (!worker.bankDetails?.accountNumber) {
+      return errorResponse(res, 'Please add your bank details to your profile before requesting a withdrawal', 400);
+    }
+
+    const { amount } = req.body as { amount?: number };
+    if (typeof amount !== 'number' || amount <= 0) {
+      return errorResponse(res, 'A valid withdrawal amount is required', 400);
+    }
+
+    if (amount < MIN_WITHDRAWAL_AMOUNT) {
+      return errorResponse(res, `Minimum withdrawal amount is Rs. ${MIN_WITHDRAWAL_AMOUNT}`, 400);
+    }
+
+    const availableBalance = calculateWorkerAvailableBalance(worker);
+    if (amount > availableBalance) {
+      return errorResponse(res, `Withdrawal amount exceeds available balance (Rs. ${availableBalance})`, 400);
+    }
+
+    const nowIso = new Date().toISOString();
+    const newWithdrawal: DevWithdrawal = {
+      _id: `withdrawal-${withdrawals.length + 1}`,
+      worker: worker._id,
+      amount,
+      bankDetails: worker.bankDetails,
+      status: 'PENDING',
+      createdAt: nowIso,
+      updatedAt: nowIso,
+    };
+    withdrawals.unshift(newWithdrawal);
+
+    return successResponse(res, newWithdrawal, 'Withdrawal request submitted successfully');
+  });
+
+  router.get('/api/users/admin/withdrawals/stats', (_req: Request, res: Response) => {
+    const pendingAmount = withdrawals
+      .filter((item) => ['PENDING', 'APPROVED'].includes(item.status))
+      .reduce((sum, item) => sum + item.amount, 0);
+    const paidAmount = withdrawals
+      .filter((item) => item.status === 'PAID')
+      .reduce((sum, item) => sum + item.amount, 0);
+
+    return successResponse(
+      res,
+      {
+        pending: withdrawals.filter((item) => item.status === 'PENDING').length,
+        approved: withdrawals.filter((item) => item.status === 'APPROVED').length,
+        rejected: withdrawals.filter((item) => item.status === 'REJECTED').length,
+        paid: withdrawals.filter((item) => item.status === 'PAID').length,
+        pendingAmount,
+        paidAmount,
+      },
+      'Withdrawal stats retrieved',
+    );
+  });
+
+  router.get('/api/users/admin/withdrawals', (req: Request, res: Response) => {
+    const page = Number(req.query.page || 1);
+    const limit = Number(req.query.limit || 10);
+    const status = String(req.query.status || '');
+
+    let items = [...withdrawals].sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+    if (status) items = items.filter((item) => item.status === status);
+
+    const withWorker = items.map((item) => {
+      const worker = workers.find((candidate) => candidate._id === item.worker);
+      return {
+        ...item,
+        worker: worker
+          ? {
+              _id: worker._id,
+              firstName: worker.firstName,
+              lastName: worker.lastName,
+              user: sanitizeUser(worker.user),
+            }
+          : item.worker,
+      };
+    });
+
+    return paginatedResponse(res, paginate(withWorker, page, limit), page, limit, items.length, 'Withdrawals retrieved');
+  });
+
+  router.put('/api/users/admin/withdrawals/:withdrawalId/review', (req: Request, res: Response) => {
+    const withdrawal = withdrawals.find((item) => item._id === req.params.withdrawalId);
+    if (!withdrawal) return notFoundResponse(res, 'Withdrawal request not found');
+
+    const { status, notes } = req.body as { status?: WithdrawalStatus; notes?: string };
+    const validTransitions: Record<string, WithdrawalStatus[]> = {
+      PENDING: ['APPROVED', 'REJECTED'],
+      APPROVED: ['PAID', 'REJECTED'],
+    };
+    const allowedNext = validTransitions[withdrawal.status] ?? [];
+    if (!status || !allowedNext.includes(status)) {
+      return errorResponse(res, `Cannot move a ${withdrawal.status} withdrawal to ${status}`, 400);
+    }
+
+    withdrawal.status = status;
+    withdrawal.adminNotes = notes;
+    withdrawal.updatedAt = new Date().toISOString();
+
+    return successResponse(res, withdrawal, `Withdrawal ${status.toLowerCase()} successfully`);
   });
 
   router.post('/api/matching/find-workers', (req: Request, res: Response) => {

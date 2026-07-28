@@ -9,4 +9,5 @@ export { Review } from './Review.js';
 export { OTP } from './OTP.js';
 export { TokenBlacklist } from './TokenBlacklist.js';
 export { ChatMessage } from './ChatMessage.js';
+export { Withdrawal, } from './Withdrawal.js';
 //# sourceMappingURL=index.js.map

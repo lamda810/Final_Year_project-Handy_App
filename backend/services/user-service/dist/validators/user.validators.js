@@ -74,6 +74,36 @@ export const addDocumentSchema = Joi.object({
     type: Joi.string().valid('cnic_front', 'cnic_back', 'profile_photo').required(),
     url: Joi.string().uri().required().trim(),
 });
+export const createWorkerSchema = Joi.object({
+    firstName: Joi.string().min(2).max(50).trim().required(),
+    lastName: Joi.string().min(2).max(50).trim().required(),
+    phone: Joi.string()
+        .pattern(/^(\+92|0)?3[0-9]{9}$/)
+        .required()
+        .messages({
+        'string.pattern.base': 'Phone must be a valid Pakistani mobile number (e.g., +923001234567 or 03001234567)',
+    }),
+    email: Joi.string().email().lowercase().trim(),
+    password: Joi.string().min(8).required(),
+    cnic: Joi.string()
+        .pattern(/^\d{5}-?\d{7}-?\d{1}$/)
+        .required()
+        .messages({
+        'string.pattern.base': 'CNIC must be a valid 13-digit Pakistani CNIC',
+    }),
+    skills: Joi.array()
+        .items(Joi.object({
+        category: Joi.string().valid('PLUMBING', 'ELECTRICAL', 'CLEANING', 'AC_REPAIR', 'CARPENTER', 'PAINTING', 'MECHANIC', 'GENERAL_HANDYMAN').required(),
+        experience: Joi.number().min(0).max(50).required(),
+        hourlyRate: Joi.number().min(100).max(10000).required(),
+    }))
+        .min(1)
+        .max(8)
+        .required(),
+    // Admin-created workers can be marked verified immediately, skipping the
+    // normal CNIC-document review queue.
+    status: Joi.string().valid('ACTIVE', 'PENDING_VERIFICATION').default('PENDING_VERIFICATION'),
+});
 export const verifyWorkerSchema = Joi.object({
     status: Joi.string().valid('ACTIVE', 'REJECTED').required(),
     notes: Joi.string().max(500).trim().allow(''),
@@ -90,5 +120,12 @@ export const verifyWorkerSchema = Joi.object({
 export const updateUserStatusSchema = Joi.object({
     isActive: Joi.boolean().required(),
     reason: Joi.string().max(500).trim(),
+});
+export const requestWithdrawalSchema = Joi.object({
+    amount: Joi.number().min(1).required(),
+});
+export const reviewWithdrawalSchema = Joi.object({
+    status: Joi.string().valid('APPROVED', 'REJECTED', 'PAID').required(),
+    notes: Joi.string().max(500).trim().allow(''),
 });
 //# sourceMappingURL=user.validators.js.map

@@ -144,3 +144,12 @@ export const updateUserStatusSchema = Joi.object({
   isActive: Joi.boolean().required(),
   reason: Joi.string().max(500).trim(),
 });
+
+export const requestWithdrawalSchema = Joi.object({
+  amount: Joi.number().min(1).required(),
+});
+
+export const reviewWithdrawalSchema = Joi.object({
+  status: Joi.string().valid('APPROVED', 'REJECTED', 'PAID').required(),
+  notes: Joi.string().max(500).trim().allow(''),
+});

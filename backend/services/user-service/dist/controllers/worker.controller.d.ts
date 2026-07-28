@@ -36,4 +36,14 @@ export declare const addDocument: (req: Request, res: Response, next: import("ex
  * GET /api/users/worker/earnings
  */
 export declare const getEarnings: (req: Request, res: Response, next: import("express").NextFunction) => void;
+/**
+ * Request a withdrawal
+ * POST /api/users/worker/withdrawals
+ */
+export declare const requestWithdrawal: (req: Request, res: Response, next: import("express").NextFunction) => void;
+/**
+ * Get the authenticated worker's withdrawal history + current balance
+ * GET /api/users/worker/withdrawals
+ */
+export declare const getWithdrawals: (req: Request, res: Response, next: import("express").NextFunction) => void;
 //# sourceMappingURL=worker.controller.d.ts.map

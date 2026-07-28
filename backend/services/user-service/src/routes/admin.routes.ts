@@ -6,6 +6,7 @@ import {
   createWorkerSchema,
   verifyWorkerSchema,
   updateUserStatusSchema,
+  reviewWithdrawalSchema,
 } from '../validators/user.validators.js';
 
 const router: IRouter = Router();
@@ -62,5 +63,32 @@ router.put('/users/:userId/status', validate(updateUserStatusSchema), adminContr
  * @access  Private (Admin)
  */
 router.get('/users/:userId', adminController.getUserDetails);
+
+/**
+ * @route   GET /api/users/admin/withdrawals/stats
+ * @desc    Get withdrawal stats for the dashboard cards
+ * @access  Private (Admin)
+ * @note    Must be registered before /withdrawals/:withdrawalId/review so
+ *          Express doesn't try to match "stats" as a withdrawalId.
+ */
+router.get('/withdrawals/stats', adminController.getWithdrawalStats);
+
+/**
+ * @route   GET /api/users/admin/withdrawals
+ * @desc    Get withdrawal requests (paginated, filterable by status)
+ * @access  Private (Admin)
+ */
+router.get('/withdrawals', adminController.getWithdrawals);
+
+/**
+ * @route   PUT /api/users/admin/withdrawals/:withdrawalId/review
+ * @desc    Approve/reject/mark a withdrawal request as paid
+ * @access  Private (Admin)
+ */
+router.put(
+  '/withdrawals/:withdrawalId/review',
+  validate(reviewWithdrawalSchema),
+  adminController.reviewWithdrawal
+);
 
 export default router;

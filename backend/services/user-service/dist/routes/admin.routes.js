@@ -2,7 +2,7 @@ import { Router } from 'express';
 import { authenticate, authorize } from '@handy-go/shared';
 import * as adminController from '../controllers/admin.controller.js';
 import { validate } from '@handy-go/shared';
-import { verifyWorkerSchema, updateUserStatusSchema, } from '../validators/user.validators.js';
+import { createWorkerSchema, verifyWorkerSchema, updateUserStatusSchema, reviewWithdrawalSchema, } from '../validators/user.validators.js';
 const router = Router();
 // All routes require authentication as ADMIN
 router.use(authenticate);
@@ -13,6 +13,12 @@ router.use(authorize('ADMIN'));
  * @access  Private (Admin)
  */
 router.get('/customers', adminController.getCustomers);
+/**
+ * @route   POST /api/users/admin/workers
+ * @desc    Create a worker directly (admin-added)
+ * @access  Private (Admin)
+ */
+router.post('/workers', validate(createWorkerSchema), adminController.createWorker);
 /**
  * @route   GET /api/users/admin/workers
  * @desc    Get all workers (paginated)
@@ -43,5 +49,25 @@ router.put('/users/:userId/status', validate(updateUserStatusSchema), adminContr
  * @access  Private (Admin)
  */
 router.get('/users/:userId', adminController.getUserDetails);
+/**
+ * @route   GET /api/users/admin/withdrawals/stats
+ * @desc    Get withdrawal stats for the dashboard cards
+ * @access  Private (Admin)
+ * @note    Must be registered before /withdrawals/:withdrawalId/review so
+ *          Express doesn't try to match "stats" as a withdrawalId.
+ */
+router.get('/withdrawals/stats', adminController.getWithdrawalStats);
+/**
+ * @route   GET /api/users/admin/withdrawals
+ * @desc    Get withdrawal requests (paginated, filterable by status)
+ * @access  Private (Admin)
+ */
+router.get('/withdrawals', adminController.getWithdrawals);
+/**
+ * @route   PUT /api/users/admin/withdrawals/:withdrawalId/review
+ * @desc    Approve/reject/mark a withdrawal request as paid
+ * @access  Private (Admin)
+ */
+router.put('/withdrawals/:withdrawalId/review', validate(reviewWithdrawalSchema), adminController.reviewWithdrawal);
 export default router;
 //# sourceMappingURL=admin.routes.js.map

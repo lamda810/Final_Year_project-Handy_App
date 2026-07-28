@@ -9,4 +9,5 @@ export {
   realtimeApi,
   settingsApi,
   paymentsApi,
+  withdrawalsApi,
 } from './api';

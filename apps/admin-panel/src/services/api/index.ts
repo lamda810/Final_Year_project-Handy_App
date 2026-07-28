@@ -8,3 +8,4 @@ export { sosApi } from './sos.api';
 export { realtimeApi } from './realtime.api';
 export { settingsApi } from './settings.api';
 export { paymentsApi } from './payments.api';
+export { withdrawalsApi } from './withdrawals.api';

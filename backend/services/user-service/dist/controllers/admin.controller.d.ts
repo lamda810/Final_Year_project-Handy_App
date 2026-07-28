@@ -5,6 +5,11 @@ import { Request, Response } from 'express';
  */
 export declare const getCustomers: (req: Request, res: Response, next: import("express").NextFunction) => void;
 /**
+ * Create a worker directly (admin-added, bypasses phone-OTP registration)
+ * POST /api/users/admin/workers
+ */
+export declare const createWorker: (req: Request, res: Response, next: import("express").NextFunction) => void;
+/**
  * Get all workers (paginated)
  * GET /api/users/admin/workers
  */
@@ -29,4 +34,19 @@ export declare const updateUserStatus: (req: Request, res: Response, next: impor
  * GET /api/users/admin/users/:userId
  */
 export declare const getUserDetails: (req: Request, res: Response, next: import("express").NextFunction) => void;
+/**
+ * Get withdrawal requests (paginated, filterable by status)
+ * GET /api/users/admin/withdrawals
+ */
+export declare const getWithdrawals: (req: Request, res: Response, next: import("express").NextFunction) => void;
+/**
+ * Get withdrawal stats for the admin dashboard cards
+ * GET /api/users/admin/withdrawals/stats
+ */
+export declare const getWithdrawalStats: (req: Request, res: Response, next: import("express").NextFunction) => void;
+/**
+ * Review a withdrawal request (approve/reject/mark paid)
+ * PUT /api/users/admin/withdrawals/:withdrawalId/review
+ */
+export declare const reviewWithdrawal: (req: Request, res: Response, next: import("express").NextFunction) => void;
 //# sourceMappingURL=admin.controller.d.ts.map

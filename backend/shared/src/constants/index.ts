@@ -77,6 +77,13 @@ export const SOS_PRIORITY_OBJ = {
 export const SOS_STATUS = ['ACTIVE', 'RESOLVED', 'ESCALATED', 'FALSE_ALARM'] as const;
 export type SOSStatus = (typeof SOS_STATUS)[number];
 
+// Withdrawal Status
+export const WITHDRAWAL_STATUS = ['PENDING', 'APPROVED', 'REJECTED', 'PAID'] as const;
+export type WithdrawalStatus = (typeof WITHDRAWAL_STATUS)[number];
+
+// Minimum amount a worker may withdraw in a single request (PKR)
+export const MIN_WITHDRAWAL_AMOUNT = 500;
+
 // OTP Purposes
 export const OTP_PURPOSES = ['REGISTRATION', 'LOGIN', 'PASSWORD_RESET', 'JOB_START', 'JOB_END'] as const;
 export type OTPPurpose = (typeof OTP_PURPOSES)[number];

@@ -46,7 +46,9 @@ void initDependencies() {
   sl.registerLazySingleton<BookingRepository>(
     () => RestBookingRepository(dio: sl<DioClient>().dio),
   );
-  sl.registerLazySingleton<WalletRepository>(() => RestWalletRepository());
+  sl.registerLazySingleton<WalletRepository>(
+    () => RestWalletRepository(dio: sl<DioClient>().dio),
+  );
   sl.registerLazySingleton<MatchingRepository>(
     () => RestMatchingRepository(dio: sl<DioClient>().dio),
   );

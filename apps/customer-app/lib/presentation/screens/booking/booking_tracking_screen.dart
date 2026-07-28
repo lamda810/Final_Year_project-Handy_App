@@ -24,6 +24,7 @@ class _BookingTrackingScreenState extends State<BookingTrackingScreen> {
   final _cancelReasonController = TextEditingController();
 
   Timer? _refreshTimer;
+  bool _isSilentFetch = false;
 
   static const List<_TrackingStatus> _statusFlow = [
     _TrackingStatus.pending,
@@ -56,8 +57,9 @@ class _BookingTrackingScreenState extends State<BookingTrackingScreen> {
     super.dispose();
   }
 
-  void _fetchBookingDetails() {
+  void _fetchBookingDetails({bool silent = false}) {
     if (_bookingId.isNotEmpty) {
+      _isSilentFetch = silent;
       context.read<BookingBloc>().add(
         LoadBookingDetailsRequested(bookingId: _bookingId),
       );
@@ -79,7 +81,7 @@ class _BookingTrackingScreenState extends State<BookingTrackingScreen> {
 
     _refreshTimer = Timer.periodic(const Duration(seconds: 10), (_) {
       if (!mounted || _bookingId.isEmpty) return;
-      _fetchBookingDetails();
+      _fetchBookingDetails(silent: true);
     });
   }
 
@@ -209,6 +211,7 @@ class _BookingTrackingScreenState extends State<BookingTrackingScreen> {
     return BlocConsumer<BookingBloc, BookingState>(
       listener: (context, state) {
         if (state is BookingDetailsLoaded) {
+          _isSilentFetch = false;
           setState(() {
             _booking = state.booking;
           });
@@ -228,12 +231,20 @@ class _BookingTrackingScreenState extends State<BookingTrackingScreen> {
             }
           });
         } else if (state is BookingError) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text(state.message),
-              backgroundColor: AppColors.error,
-            ),
-          );
+          // Silent background polling (every 10s) failing on a transient
+          // network blip shouldn't repeatedly interrupt the user with the
+          // same snackbar. Explicit user actions (initial load, pull to
+          // refresh, cancel) still surface their errors normally.
+          final wasSilent = _isSilentFetch;
+          _isSilentFetch = false;
+          if (!wasSilent) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text(state.message),
+                backgroundColor: AppColors.error,
+              ),
+            );
+          }
         } else if (state is JobOtpRevealed) {
           showDialog(
             context: context,

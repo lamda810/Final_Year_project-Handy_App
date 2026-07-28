@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/constants/app_spacing.dart';
+import '../../../data/models/wallet_model.dart';
 import '../../../domain/repositories/booking_repository.dart';
 import '../../../domain/repositories/wallet_repository.dart';
 import '../../../domain/repositories/worker_repository.dart';
@@ -24,6 +25,14 @@ class _EarningsScreenState extends State<EarningsScreen> {
   double _pendingEarnings = 0;
   int _totalJobs = 0;
   List<Map<String, dynamic>> _earningsBreakdown = [];
+
+  // Real withdrawable balance and history from the wallet repository —
+  // distinct from _totalEarnings, which is the gross total for the
+  // selected period (today/week/month) and isn't what's actually available
+  // to withdraw (that's net earnings minus amounts already paid out or
+  // still pending review).
+  double _availableBalance = 0;
+  List<TransactionModel> _withdrawals = [];
 
   @override
   void initState() {
@@ -75,6 +84,21 @@ class _EarningsScreenState extends State<EarningsScreen> {
         // Pending calculation is best-effort
       }
 
+      // Real withdrawable balance + withdrawal history — best-effort so a
+      // wallet-endpoint hiccup doesn't block the rest of the earnings view.
+      double availableBalance = 0;
+      List<TransactionModel> withdrawals = [];
+      try {
+        final walletResult = await _walletDS.getTransactions(
+          userId: 'me',
+          limit: 20,
+        );
+        withdrawals = walletResult.transactions;
+        availableBalance = await _walletDS.getBalance('me');
+      } catch (_) {
+        // Wallet fetch is best-effort
+      }
+
       // Build period label for display
       String periodLabel;
       switch (_selectedPeriod) {
@@ -96,6 +120,8 @@ class _EarningsScreenState extends State<EarningsScreen> {
             ((data['totalEarnings'] ?? data['total']) ?? 0).toDouble();
         _totalJobs = (data['completedJobs'] ?? data['count'] ?? 0) as int;
         _pendingEarnings = pending;
+        _availableBalance = availableBalance;
+        _withdrawals = withdrawals;
         final breakdown = data['breakdown'];
         if (breakdown is List) {
           _earningsBreakdown = breakdown
@@ -310,18 +336,42 @@ class _EarningsScreenState extends State<EarningsScreen> {
 
                     const SizedBox(height: AppSpacing.xl),
 
-                    // Withdraw Button
+                    // Withdraw Button — gated on the real available
+                    // balance (net completed-job earnings minus amounts
+                    // already withdrawn/pending), not the period-filtered
+                    // total shown above.
                     OutlinedButton.icon(
-                      onPressed: _totalEarnings >= 500
+                      onPressed: _availableBalance >= 500
                           ? () => _showWithdrawDialog()
                           : null,
                       icon: const Icon(Icons.account_balance),
                       label: Text(
-                        _totalEarnings < 500
+                        _availableBalance < 500
                             ? 'Min Rs. 500 to withdraw'
-                            : 'Withdraw to Bank',
+                            : 'Withdraw to Bank (Rs. ${_availableBalance.toStringAsFixed(0)} available)',
                       ),
                     ),
+
+                    if (_withdrawals.isNotEmpty) ...[
+                      const SizedBox(height: AppSpacing.xl),
+                      const Text(
+                        'Withdrawal Requests',
+                        style: TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      const SizedBox(height: AppSpacing.md),
+                      ListView.separated(
+                        shrinkWrap: true,
+                        physics: const NeverScrollableScrollPhysics(),
+                        itemCount: _withdrawals.length,
+                        separatorBuilder: (_, index) =>
+                            const Divider(height: AppSpacing.md),
+                        itemBuilder: (context, index) =>
+                            _buildWithdrawalItem(_withdrawals[index]),
+                      ),
+                    ],
 
                     const SizedBox(height: AppSpacing.lg),
                   ],
@@ -342,7 +392,7 @@ class _EarningsScreenState extends State<EarningsScreen> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              'Available: Rs. ${_totalEarnings.toStringAsFixed(0)}',
+              'Available: Rs. ${_availableBalance.toStringAsFixed(0)}',
               style: const TextStyle(fontWeight: FontWeight.w600),
             ),
             const SizedBox(height: 12),
@@ -379,7 +429,7 @@ class _EarningsScreenState extends State<EarningsScreen> {
                 );
                 return;
               }
-              if (amount > _totalEarnings) {
+              if (amount > _availableBalance) {
                 ScaffoldMessenger.of(context).showSnackBar(
                   const SnackBar(
                     content: Text('Insufficient balance'),
@@ -391,9 +441,9 @@ class _EarningsScreenState extends State<EarningsScreen> {
               Navigator.pop(ctx);
               try {
                 await _walletDS.requestWithdrawal(
-                  userId: 'local-worker-wallet',
+                  userId: 'me',
                   amount: amount,
-                  bankDetails: {}, // Uses bank details from worker profile
+                  bankDetails: {}, // Backend reads bank details from worker profile
                 );
                 if (mounted) {
                   ScaffoldMessenger.of(context).showSnackBar(
@@ -522,6 +572,57 @@ class _EarningsScreenState extends State<EarningsScreen> {
           fontSize: 16,
           fontWeight: FontWeight.bold,
           color: AppColors.success,
+        ),
+      ),
+    );
+  }
+
+  Widget _buildWithdrawalItem(TransactionModel withdrawal) {
+    final Color statusColor;
+    final String statusLabel;
+    switch (withdrawal.status) {
+      case TransactionStatus.completed:
+        statusColor = AppColors.success;
+        statusLabel = 'Paid';
+        break;
+      case TransactionStatus.failed:
+        statusColor = AppColors.error;
+        statusLabel = 'Rejected';
+        break;
+      case TransactionStatus.pending:
+      case TransactionStatus.reversed:
+        statusColor = AppColors.warning;
+        statusLabel = 'Pending review';
+        break;
+    }
+
+    return ListTile(
+      contentPadding: EdgeInsets.zero,
+      leading: Container(
+        width: 48,
+        height: 48,
+        decoration: BoxDecoration(
+          color: statusColor.withValues(alpha: 0.1),
+          borderRadius: BorderRadius.circular(AppSpacing.radiusSM),
+        ),
+        child: Icon(Icons.account_balance, color: statusColor),
+      ),
+      title: Text(
+        'Rs. ${withdrawal.amount.toStringAsFixed(0)}',
+        style: const TextStyle(fontWeight: FontWeight.w500),
+      ),
+      subtitle: Text(
+        withdrawal.description?.isNotEmpty == true
+            ? '$statusLabel — ${withdrawal.description}'
+            : statusLabel,
+        style: const TextStyle(fontSize: 12),
+      ),
+      trailing: Text(
+        statusLabel,
+        style: TextStyle(
+          fontSize: 12,
+          fontWeight: FontWeight.w600,
+          color: statusColor,
         ),
       ),
     );
