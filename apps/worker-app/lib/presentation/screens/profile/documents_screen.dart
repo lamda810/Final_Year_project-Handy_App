@@ -1,6 +1,7 @@
 import 'dart:typed_data';
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/scheduler.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:image_picker/image_picker.dart';
 import '../../blocs/auth/auth_bloc.dart';
@@ -53,8 +54,24 @@ class _DocumentsScreenState extends State<DocumentsScreen> {
     _loadDocuments();
   }
 
+  void _safeSetState(VoidCallback fn) {
+    if (!mounted) return;
+    // Defer to after the current frame when one is mid-flight (e.g. this
+    // is reached from the initState-triggered load, before the first
+    // layout pass has finished) — calling setState synchronously in that
+    // window trips the framework's '!_debugDoingThisLayout' assertion.
+    final phase = SchedulerBinding.instance.schedulerPhase;
+    if (phase == SchedulerPhase.persistentCallbacks) {
+      SchedulerBinding.instance.addPostFrameCallback((_) {
+        if (mounted) setState(fn);
+      });
+    } else {
+      setState(fn);
+    }
+  }
+
   Future<void> _loadDocuments() async {
-    setState(() {
+    _safeSetState(() {
       _errorMessage = null;
     });
     try {
@@ -75,11 +92,11 @@ class _DocumentsScreenState extends State<DocumentsScreen> {
 
       final worker = _worker;
       if (worker == null) {
-        _errorMessage = 'Could not load worker profile. Please try again.';
+        _safeSetState(() {
+          _errorMessage = 'Could not load worker profile. Please try again.';
+        });
         return;
       }
-
-      _documents.clear();
 
       // Helper to convert string status from DB to DocumentStatus enum
       DocumentStatus mapStatus(String dbStatus, bool hasImage) {
@@ -95,10 +112,14 @@ class _DocumentsScreenState extends State<DocumentsScreen> {
         }
       }
 
-      // Build documents list from worker profile — use per-document status
       final hasCnicFront =
           worker.cnicFrontImage != null && worker.cnicFrontImage!.isNotEmpty;
-      _documents.add(
+      final hasCnicBack =
+          worker.cnicBackImage != null && worker.cnicBackImage!.isNotEmpty;
+      final hasProfilePhoto =
+          worker.profileImage != null && worker.profileImage!.isNotEmpty;
+
+      final newDocuments = [
         _Document(
           id: 'cnic_front',
           type: 'CNIC Front',
@@ -107,11 +128,6 @@ class _DocumentsScreenState extends State<DocumentsScreen> {
           uploadedAt: worker.createdAt,
           url: worker.cnicFrontImage,
         ),
-      );
-
-      final hasCnicBack =
-          worker.cnicBackImage != null && worker.cnicBackImage!.isNotEmpty;
-      _documents.add(
         _Document(
           id: 'cnic_back',
           type: 'CNIC Back',
@@ -120,11 +136,6 @@ class _DocumentsScreenState extends State<DocumentsScreen> {
           uploadedAt: worker.createdAt,
           url: worker.cnicBackImage,
         ),
-      );
-
-      final hasProfilePhoto =
-          worker.profileImage != null && worker.profileImage!.isNotEmpty;
-      _documents.add(
         _Document(
           id: 'profile_photo',
           type: 'Profile Photo',
@@ -133,11 +144,19 @@ class _DocumentsScreenState extends State<DocumentsScreen> {
           uploadedAt: worker.createdAt,
           url: worker.profileImage,
         ),
-      );
+      ];
+
+      _safeSetState(() {
+        _documents
+          ..clear()
+          ..addAll(newDocuments);
+      });
     } catch (e) {
       final msg = e.toString().replaceAll('Exception: ', '');
-      _errorMessage = 'Failed to load documents: $msg';
       if (mounted) {
+        _safeSetState(() {
+          _errorMessage = 'Failed to load documents: $msg';
+        });
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(_errorMessage!),
@@ -146,7 +165,7 @@ class _DocumentsScreenState extends State<DocumentsScreen> {
         );
       }
     } finally {
-      if (mounted) setState(() => _isLoading = false);
+      _safeSetState(() => _isLoading = false);
     }
   }
 

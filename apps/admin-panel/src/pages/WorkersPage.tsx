@@ -120,11 +120,14 @@ export default function WorkersPage() {
   const [viewDialogOpen, setViewDialogOpen] = useState(false);
   const [verifyDialogOpen, setVerifyDialogOpen] = useState(false);
   const [verifyNotes, setVerifyNotes] = useState('');
+  const [verifyError, setVerifyError] = useState<string | null>(null);
+  const [verifying, setVerifying] = useState(false);
   const [docDecisions, setDocDecisions] = useState<{
-    cnicFront: DocumentReviewStatus;
-    cnicBack: DocumentReviewStatus;
-    profilePhoto: DocumentReviewStatus;
-  }>({ cnicFront: 'pending', cnicBack: 'pending', profilePhoto: 'pending' });
+    cnicFront: 'verified' | 'rejected';
+    cnicBack: 'verified' | 'rejected';
+    profilePhoto: 'verified' | 'rejected';
+  }>({ cnicFront: 'verified', cnicBack: 'verified', profilePhoto: 'verified' });
+  const [docPreview, setDocPreview] = useState<{ label: string; url: string } | null>(null);
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
   const [createForm, setCreateForm] = useState(emptyCreateForm);
   const [createError, setCreateError] = useState<string | null>(null);
@@ -178,6 +181,7 @@ export default function WorkersPage() {
 
   const handleOpenVerifyDialog = () => {
     setVerifyNotes('');
+    setVerifyError(null);
     setDocDecisions({
       cnicFront: selectedWorker?.cnicFrontStatus === 'rejected' ? 'rejected' : 'verified',
       cnicBack: selectedWorker?.cnicBackStatus === 'rejected' ? 'rejected' : 'verified',
@@ -188,20 +192,26 @@ export default function WorkersPage() {
   };
 
   const handleVerifyWorker = async (approve: boolean) => {
-    if (selectedWorker) {
-      try {
-        await usersApi.verifyWorker(selectedWorker._id, {
-          status: approve ? 'ACTIVE' : 'REJECTED',
-          notes: verifyNotes || (approve ? 'Approved by admin' : 'Rejected by admin'),
-          documentDecisions: docDecisions,
-        });
-        refetch();
-      } catch (error) {
-        console.error('Failed to verify worker:', error);
-      }
+    if (!selectedWorker) return;
+    setVerifyError(null);
+    setVerifying(true);
+    try {
+      await usersApi.verifyWorker(selectedWorker._id, {
+        status: approve ? 'ACTIVE' : 'REJECTED',
+        notes: verifyNotes || (approve ? 'Approved by admin' : 'Rejected by admin'),
+        documentDecisions: docDecisions,
+      });
+      await refetch();
+      setVerifyDialogOpen(false);
+      setSelectedWorker(null);
+    } catch (error) {
+      console.error('Failed to verify worker:', error);
+      setVerifyError(
+        error instanceof Error ? error.message : 'Failed to submit decision. Please try again.',
+      );
+    } finally {
+      setVerifying(false);
     }
-    setVerifyDialogOpen(false);
-    setSelectedWorker(null);
   };
 
   const handleOpenCreateDialog = () => {
@@ -669,11 +679,16 @@ export default function WorkersPage() {
           <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
             Approve or reject each document, then approve or reject the overall application.
           </Typography>
+          {verifyError && (
+            <Alert severity="error" sx={{ mb: 2 }}>
+              {verifyError}
+            </Alert>
+          )}
           {(
             [
-              { key: 'cnicFront' as const, label: 'CNIC Front' },
-              { key: 'cnicBack' as const, label: 'CNIC Back' },
-              { key: 'profilePhoto' as const, label: 'Profile Photo' },
+              { key: 'cnicFront' as const, label: 'CNIC Front', url: selectedWorker?.cnicFrontImage },
+              { key: 'cnicBack' as const, label: 'CNIC Back', url: selectedWorker?.cnicBackImage },
+              { key: 'profilePhoto' as const, label: 'Profile Photo', url: selectedWorker?.profileImage },
             ]
           ).map((doc) => (
             <Box
@@ -682,6 +697,15 @@ export default function WorkersPage() {
             >
               <Typography variant="body2">{doc.label}</Typography>
               <Box sx={{ display: 'flex', gap: 1 }}>
+                <Button
+                  size="small"
+                  variant="outlined"
+                  startIcon={<ViewIcon fontSize="small" />}
+                  disabled={!doc.url}
+                  onClick={() => doc.url && setDocPreview({ label: doc.label, url: doc.url })}
+                >
+                  View
+                </Button>
                 <Button
                   size="small"
                   variant={docDecisions[doc.key] === 'verified' ? 'contained' : 'outlined'}
@@ -713,13 +737,38 @@ export default function WorkersPage() {
           />
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setVerifyDialogOpen(false)}>Cancel</Button>
-          <Button onClick={() => handleVerifyWorker(false)} color="error">
+          <Button onClick={() => setVerifyDialogOpen(false)} disabled={verifying}>
+            Cancel
+          </Button>
+          <Button onClick={() => handleVerifyWorker(false)} color="error" disabled={verifying}>
             Reject Application
           </Button>
-          <Button onClick={() => handleVerifyWorker(true)} variant="contained" color="success">
+          <Button
+            onClick={() => handleVerifyWorker(true)}
+            variant="contained"
+            color="success"
+            disabled={verifying}
+          >
             Approve Application
           </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Document Preview Dialog */}
+      <Dialog open={Boolean(docPreview)} onClose={() => setDocPreview(null)} maxWidth="sm" fullWidth>
+        <DialogTitle>{docPreview?.label}</DialogTitle>
+        <DialogContent>
+          {docPreview && (
+            <Box
+              component="img"
+              src={docPreview.url}
+              alt={docPreview.label}
+              sx={{ width: '100%', maxHeight: '70vh', objectFit: 'contain', display: 'block' }}
+            />
+          )}
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setDocPreview(null)}>Close</Button>
         </DialogActions>
       </Dialog>
 
