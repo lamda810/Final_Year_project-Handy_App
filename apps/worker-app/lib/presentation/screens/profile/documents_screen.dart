@@ -5,7 +5,6 @@ import 'package:flutter/scheduler.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:image_picker/image_picker.dart';
 import '../../blocs/auth/auth_bloc.dart';
-import '../../blocs/auth/auth_event.dart';
 import '../../blocs/auth/auth_state.dart';
 import '../../routes/app_routes.dart';
 import '../../../core/constants/app_colors.dart';
@@ -277,12 +276,19 @@ class _DocumentsScreenState extends State<DocumentsScreen> {
       setState(() => _isLoading = true);
       try {
         await _repository.uploadDocument(type, image.path);
-        // Refresh from server to get updated URLs
+        // Refresh from server to get updated URLs. Deliberately not
+        // dispatching AuthBloc's RefreshProfile() here: this screen is
+        // pushed on top of ProfileScreen/HomeScreen (which stay mounted
+        // underneath), and those screens each have their own
+        // BlocListener<AuthBloc> that calls setState the moment a new
+        // Authenticated state is emitted. Firing RefreshProfile mid-upload
+        // made that listener rebuild the screen beneath this one in the
+        // same frame this screen's own _loadDocuments() below is rebuilding
+        // it — the two concurrent, unrelated setState calls raced and threw
+        // '!_debugDoingThisLayout', which read as a crash/blank page.
+        // ProfileScreen already dispatches RefreshProfile once this route
+        // pops, which is the correct single point to do it.
         _worker = await _repository.getProfile();
-        // Refresh AuthBloc so profile & documents screens show updated data
-        if (mounted) {
-          context.read<AuthBloc>().add(RefreshProfile());
-        }
         await _loadDocuments();
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
@@ -793,33 +799,43 @@ class _DocumentsScreenState extends State<DocumentsScreen> {
                   ),
                 ),
                 const SizedBox(width: AppSpacing.sm),
-                // Actions
+                // Actions. Wrapped in Flexible so the button can never be
+                // asked to lay out under unbounded (infinite) width —
+                // without this, a Row containing a bare *Button.icon whose
+                // Card ancestor is mid-transition (e.g. this whole tile is
+                // freshly inserted into the ListView right after an
+                // upload/refresh) can transiently receive
+                // BoxConstraints(w=Infinity), which crashes layout.
                 if (!hasImage)
                   // Upload button for documents without image
-                  FilledButton.icon(
-                    onPressed: () => _uploadDocument(document.id),
-                    icon: const Icon(Icons.upload, size: 18),
-                    label: const Text('Upload'),
-                    style: FilledButton.styleFrom(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: AppSpacing.md,
-                        vertical: AppSpacing.sm,
+                  Flexible(
+                    child: FilledButton.icon(
+                      onPressed: () => _uploadDocument(document.id),
+                      icon: const Icon(Icons.upload, size: 18),
+                      label: const Text('Upload'),
+                      style: FilledButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: AppSpacing.md,
+                          vertical: AppSpacing.sm,
+                        ),
+                        textStyle: const TextStyle(fontSize: 13),
                       ),
-                      textStyle: const TextStyle(fontSize: 13),
                     ),
                   ),
                 if (hasImage && document.status != DocumentStatus.verified)
                   // Replace button for uploaded but not verified docs
-                  OutlinedButton.icon(
-                    onPressed: () => _uploadDocument(document.id),
-                    icon: const Icon(Icons.refresh, size: 18),
-                    label: const Text('Replace'),
-                    style: OutlinedButton.styleFrom(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: AppSpacing.md,
-                        vertical: AppSpacing.sm,
+                  Flexible(
+                    child: OutlinedButton.icon(
+                      onPressed: () => _uploadDocument(document.id),
+                      icon: const Icon(Icons.refresh, size: 18),
+                      label: const Text('Replace'),
+                      style: OutlinedButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: AppSpacing.md,
+                          vertical: AppSpacing.sm,
+                        ),
+                        textStyle: const TextStyle(fontSize: 13),
                       ),
-                      textStyle: const TextStyle(fontSize: 13),
                     ),
                   ),
                 if (!hasImage)

@@ -59,12 +59,14 @@ class DioClient {
       ),
     );
 
-    // Logger
+    // Logger. responseBody is off because it dumps raw bytes for binary
+    // responses (e.g. document/image downloads), flooding the console with
+    // thousands of byte-array numbers and burying the actual error output.
     dio.interceptors.add(
       PrettyDioLogger(
         requestHeader: true,
         requestBody: true,
-        responseBody: true,
+        responseBody: false,
       ),
     );
   }
