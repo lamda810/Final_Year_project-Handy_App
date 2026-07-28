@@ -87,12 +87,12 @@ class RestAuthRepository implements AuthRepository {
   }
 
   @override
-  Future<Map<String, dynamic>> login(String email, String password) async {
+  Future<Map<String, dynamic>> login(String phone, String password) async {
     try {
       final response = await _dio.post(
         ApiEndpoints.login,
         data: {
-          'email': email,
+          'phone': phone,
           'password': password,
         },
       );

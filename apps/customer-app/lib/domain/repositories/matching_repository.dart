@@ -1,6 +1,7 @@
 abstract class MatchingRepository {
   Future<Map<String, dynamic>> askAiAssistant({
     required String message,
+    List<Map<String, String>>? conversationHistory,
     String? city,
     String? area,
   });

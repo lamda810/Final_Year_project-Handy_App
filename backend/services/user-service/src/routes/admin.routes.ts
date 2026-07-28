@@ -3,6 +3,7 @@ import { authenticate, authorize } from '@handy-go/shared';
 import * as adminController from '../controllers/admin.controller.js';
 import { validate } from '@handy-go/shared';
 import {
+  createWorkerSchema,
   verifyWorkerSchema,
   updateUserStatusSchema,
 } from '../validators/user.validators.js';
@@ -19,6 +20,13 @@ router.use(authorize('ADMIN'));
  * @access  Private (Admin)
  */
 router.get('/customers', adminController.getCustomers);
+
+/**
+ * @route   POST /api/users/admin/workers
+ * @desc    Create a worker directly (admin-added)
+ * @access  Private (Admin)
+ */
+router.post('/workers', validate(createWorkerSchema), adminController.createWorker);
 
 /**
  * @route   GET /api/users/admin/workers

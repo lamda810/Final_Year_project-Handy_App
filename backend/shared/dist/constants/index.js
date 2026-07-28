@@ -56,7 +56,7 @@ export const SOS_PRIORITY_OBJ = {
 // SOS Status
 export const SOS_STATUS = ['ACTIVE', 'RESOLVED', 'ESCALATED', 'FALSE_ALARM'];
 // OTP Purposes
-export const OTP_PURPOSES = ['REGISTRATION', 'LOGIN', 'PASSWORD_RESET'];
+export const OTP_PURPOSES = ['REGISTRATION', 'LOGIN', 'PASSWORD_RESET', 'JOB_START', 'JOB_END'];
 // Notification Types
 export const NOTIFICATION_TYPES = ['BOOKING', 'PAYMENT', 'SOS', 'SYSTEM', 'PROMOTION'];
 // Days of Week

@@ -34,6 +34,7 @@ export interface IBookingAddress {
  */
 export interface IPricing {
     estimatedPrice?: number;
+    negotiatedPrice?: number;
     finalPrice?: number;
     laborCost?: number;
     materialsCost?: number;

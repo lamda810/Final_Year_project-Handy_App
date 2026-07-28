@@ -7,16 +7,19 @@ import 'data/repositories/rest_auth_repository.dart';
 import 'data/repositories/rest_booking_repository.dart';
 import 'data/repositories/rest_worker_repository.dart';
 import 'data/repositories/rest_wallet_repository.dart';
+import 'data/repositories/rest_matching_repository.dart';
 
 import 'domain/repositories/auth_repository.dart';
 import 'domain/repositories/booking_repository.dart';
 import 'domain/repositories/wallet_repository.dart';
 import 'domain/repositories/worker_repository.dart';
+import 'domain/repositories/matching_repository.dart';
 
 import 'presentation/blocs/bookings/bookings_bloc.dart';
 import 'presentation/blocs/earnings/earnings_bloc.dart';
 import 'presentation/blocs/home/home_bloc.dart';
 import 'presentation/blocs/profile/profile_bloc.dart';
+import 'presentation/blocs/chatbot/chatbot_bloc.dart';
 
 /// Global service-locator instance.
 final GetIt sl = GetIt.instance;
@@ -44,6 +47,9 @@ void initDependencies() {
     () => RestBookingRepository(dio: sl<DioClient>().dio),
   );
   sl.registerLazySingleton<WalletRepository>(() => RestWalletRepository());
+  sl.registerLazySingleton<MatchingRepository>(
+    () => RestMatchingRepository(dio: sl<DioClient>().dio),
+  );
 
   // ── BLoCs (factories — new instance per screen) ──
 
@@ -64,5 +70,8 @@ void initDependencies() {
   );
   sl.registerFactory<ProfileBloc>(
     () => ProfileBloc(workerRepository: sl<WorkerRepository>()),
+  );
+  sl.registerFactory<ChatbotBloc>(
+    () => ChatbotBloc(matchingRepository: sl<MatchingRepository>()),
   );
 }

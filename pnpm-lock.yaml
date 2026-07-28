@@ -93,6 +93,9 @@ importers:
       '@handy-go/user-service':
         specifier: workspace:*
         version: link:../services/user-service
+      cloudinary:
+        specifier: ^1.41.0
+        version: 1.41.3
       compression:
         specifier: ^1.7.4
         version: 1.8.1

@@ -76,14 +76,18 @@ class RestBookingRepository implements BookingRepository {
     required String otpCode,
     List<String>? beforeImages,
   }) async {
-    final response = await _dio.post(
-      ApiEndpoints.startBooking(bookingId),
-      data: {
-        'otpCode': otpCode,
-        if (beforeImages != null) 'beforeImages': beforeImages,
-      },
-    );
-    return BookingModel.fromJson(response.data['data'] ?? response.data);
+    try {
+      final response = await _dio.post(
+        ApiEndpoints.startBooking(bookingId),
+        data: {
+          'otpCode': otpCode,
+          if (beforeImages != null) 'beforeImages': beforeImages,
+        },
+      );
+      return BookingModel.fromJson(response.data['data'] ?? response.data);
+    } on DioException catch (e) {
+      throw Exception(_serverMessage(e));
+    }
   }
 
   @override
@@ -94,16 +98,31 @@ class RestBookingRepository implements BookingRepository {
     double? finalPrice,
     double? materialsCost,
   }) async {
-    final response = await _dio.post(
-      ApiEndpoints.completeBooking(bookingId),
-      data: {
-        'otpCode': otpCode,
-        if (afterImages != null) 'afterImages': afterImages,
-        if (finalPrice != null) 'finalPrice': finalPrice,
-        if (materialsCost != null) 'materialsCost': materialsCost,
-      },
-    );
-    return BookingModel.fromJson(response.data['data'] ?? response.data);
+    try {
+      final response = await _dio.post(
+        ApiEndpoints.completeBooking(bookingId),
+        data: {
+          'otpCode': otpCode,
+          if (afterImages != null) 'afterImages': afterImages,
+          if (finalPrice != null) 'finalPrice': finalPrice,
+          if (materialsCost != null) 'materialsCost': materialsCost,
+        },
+      );
+      return BookingModel.fromJson(response.data['data'] ?? response.data);
+    } on DioException catch (e) {
+      throw Exception(_serverMessage(e));
+    }
+  }
+
+  /// Extracts the backend's own error message (e.g. "Invalid OTP code")
+  /// from a failed response instead of letting the raw DioException
+  /// (which stringifies as "DioException [bad response]: ...") reach the UI.
+  String _serverMessage(DioException e) {
+    final data = e.response?.data;
+    if (data is Map && data['message'] is String) {
+      return data['message'] as String;
+    }
+    return 'Something went wrong. Please try again.';
   }
 
   @override

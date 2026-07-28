@@ -531,3 +531,7 @@
 {"level":"info","message":"Notification service running on port 3005","service":"handy-go","timestamp":"2026-07-20 21:24:25"}
 {"level":"info","message":"Environment: development","service":"handy-go","timestamp":"2026-07-20 21:24:25"}
 {"level":"info","message":"SIGTERM received. Shutting down gracefully...","service":"handy-go","timestamp":"2026-07-21 00:51:19"}
+{"level":"warn","message":"Firebase credentials not configured - push notifications disabled","service":"handy-go","timestamp":"2026-07-26 14:26:17"}
+{"level":"info","message":"Twilio client initialized","service":"handy-go","timestamp":"2026-07-26 14:26:17"}
+{"level":"warn","message":"Email credentials not configured - email notifications disabled","service":"handy-go","timestamp":"2026-07-26 14:26:17"}
+{"code":"EREFUSED","hostname":"_mongodb._tcp.cluster0.gohx8ew.mongodb.net","level":"error","message":"Failed to start notification service: querySrv EREFUSED _mongodb._tcp.cluster0.gohx8ew.mongodb.net","service":"handy-go","stack":"Error: querySrv EREFUSED _mongodb._tcp.cluster0.gohx8ew.mongodb.net\n    at QueryReqWrap.onresolve [as oncomplete] (node:internal/dns/promises:294:17)","syscall":"querySrv","timestamp":"2026-07-26 14:26:22"}

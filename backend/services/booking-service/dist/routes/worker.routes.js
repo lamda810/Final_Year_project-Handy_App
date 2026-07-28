@@ -2,7 +2,7 @@ import { Router } from 'express';
 import { authenticate, authorize } from '@handy-go/shared';
 import * as workerController from '../controllers/worker.controller.js';
 import { validate } from '@handy-go/shared';
-import { acceptBookingSchema, rejectBookingSchema, startJobSchema, completeJobSchema, updateLocationSchema, } from '../validators/booking.validators.js';
+import { acceptBookingSchema, rejectBookingSchema, startJobWithOtpSchema, completeJobWithOtpSchema, updateLocationSchema, } from '../validators/booking.validators.js';
 const router = Router();
 // All routes require authentication as WORKER
 router.use(authenticate);
@@ -33,16 +33,16 @@ router.post('/:bookingId/accept', validate(acceptBookingSchema), workerControlle
 router.post('/:bookingId/reject', validate(rejectBookingSchema), workerController.rejectBooking);
 /**
  * @route   POST /api/bookings/:bookingId/start
- * @desc    Start job
+ * @desc    Start job (requires the JOB_START OTP the customer reads aloud)
  * @access  Private (Worker)
  */
-router.post('/:bookingId/start', validate(startJobSchema), workerController.startJob);
+router.post('/:bookingId/start', validate(startJobWithOtpSchema), workerController.startJob);
 /**
  * @route   POST /api/bookings/:bookingId/complete
- * @desc    Complete job
+ * @desc    Complete job (requires the JOB_END OTP the customer reads aloud)
  * @access  Private (Worker)
  */
-router.post('/:bookingId/complete', validate(completeJobSchema), workerController.completeJob);
+router.post('/:bookingId/complete', validate(completeJobWithOtpSchema), workerController.completeJob);
 /**
  * @route   PUT /api/bookings/:bookingId/location
  * @desc    Update worker location for booking

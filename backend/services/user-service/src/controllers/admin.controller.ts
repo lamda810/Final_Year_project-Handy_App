@@ -6,9 +6,13 @@ import {
   Notification,
   asyncHandler,
   successResponse,
+  createdResponse,
   errorResponse,
   notFoundResponse,
+  conflictResponse,
   paginatedResponse,
+  normalizePhoneNumber,
+  normalizeCNIC,
   HTTP_STATUS,
   DEFAULTS,
 } from '@handy-go/shared';
@@ -54,6 +58,58 @@ export const getCustomers = asyncHandler(async (req: Request, res: Response) => 
   }
 
   return paginatedResponse(res, filteredCustomers, page, limit, total, 'Customers retrieved');
+});
+
+/**
+ * Create a worker directly (admin-added, bypasses phone-OTP registration)
+ * POST /api/users/admin/workers
+ */
+export const createWorker = asyncHandler(async (req: Request, res: Response) => {
+  const { firstName, lastName, email, password, skills, status } = req.body;
+
+  const phone = normalizePhoneNumber(req.body.phone);
+  const cnic = normalizeCNIC(req.body.cnic);
+
+  const existingUser = await User.findOne({ phone });
+  if (existingUser) {
+    return conflictResponse(res, 'An account with this phone number already exists');
+  }
+
+  const cnicExists = await Worker.findByCNIC(cnic);
+  if (cnicExists) {
+    return conflictResponse(res, 'An account with this CNIC already exists');
+  }
+
+  if (email) {
+    const emailExists = await User.findOne({ email: email.toLowerCase() });
+    if (emailExists) {
+      return conflictResponse(res, 'An account with this email already exists');
+    }
+  }
+
+  const user = await User.create({
+    phone,
+    email: email?.toLowerCase(),
+    password,
+    role: 'WORKER',
+    isVerified: true,
+  });
+
+  const workerStatus = status || 'PENDING_VERIFICATION';
+  const worker = await Worker.create({
+    user: user._id,
+    firstName,
+    lastName,
+    cnic,
+    skills: skills.map((skill: any) => ({
+      ...skill,
+      isVerified: workerStatus === 'ACTIVE',
+    })),
+    cnicVerified: workerStatus === 'ACTIVE',
+    status: workerStatus,
+  });
+
+  return createdResponse(res, worker, 'Worker created successfully');
 });
 
 /**

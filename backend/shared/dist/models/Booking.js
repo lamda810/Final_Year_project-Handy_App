@@ -96,6 +96,7 @@ const bookingSchema = new Schema({
     },
     pricing: {
         estimatedPrice: Number,
+        negotiatedPrice: Number,
         finalPrice: Number,
         laborCost: Number,
         materialsCost: Number,

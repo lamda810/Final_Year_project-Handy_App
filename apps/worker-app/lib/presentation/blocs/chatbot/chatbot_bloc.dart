@@ -1,29 +1,36 @@
 import 'package:flutter_bloc/flutter_bloc.dart';
+
+import '../../../core/utils/error_mapper.dart';
 import '../../../domain/repositories/matching_repository.dart';
 import 'chatbot_event.dart';
 import 'chatbot_state.dart';
 
+/// Drives the worker-facing AI assistant: keeps the running conversation
+/// and forwards each turn (with recent history) to the matching-service
+/// chatbot endpoint.
 class ChatbotBloc extends Bloc<ChatbotEvent, ChatbotState> {
-  final MatchingRepository _matchingRepository;
+  final MatchingRepository _matchingRepo;
   final List<Map<String, dynamic>> _messages = [];
 
   ChatbotBloc({required MatchingRepository matchingRepository})
-      : _matchingRepository = matchingRepository,
-        super(ChatbotInitial()) {
+    : _matchingRepo = matchingRepository,
+      super(const ChatbotInitial()) {
     on<SendChatMessage>(_onSendChatMessage);
     on<ResetChatbot>(_onResetChatbot);
   }
 
   List<Map<String, String>> _historyForApi() {
-    // Last 10 turns is plenty of context and keeps the request small.
+    // Last 10 turns is enough context and keeps the request small.
     final recent = _messages.length > 10
         ? _messages.sublist(_messages.length - 10)
         : _messages;
     return recent
-        .map((m) => {
-              'role': (m['isUser'] as bool) ? 'user' : 'assistant',
-              'content': (m['text'] ?? '').toString(),
-            })
+        .map(
+          (m) => {
+            'role': (m['isUser'] as bool) ? 'user' : 'assistant',
+            'content': (m['text'] ?? '').toString(),
+          },
+        )
         .where((m) => m['content']!.isNotEmpty)
         .toList();
   }
@@ -32,41 +39,30 @@ class ChatbotBloc extends Bloc<ChatbotEvent, ChatbotState> {
     SendChatMessage event,
     Emitter<ChatbotState> emit,
   ) async {
-    // Snapshot history before appending the new user message.
     final historyForApi = _historyForApi();
 
-    // Add user message to list
     _messages.add({
       'isUser': true,
       'text': event.message,
       'timestamp': DateTime.now(),
     });
-
     emit(ChatbotResponseReceived(List.from(_messages)));
-    emit(ChatbotLoading());
+    emit(const ChatbotLoading());
 
     try {
-      final response = await _matchingRepository.askAiAssistant(
+      final response = await _matchingRepo.askAiAssistant(
         message: event.message,
         conversationHistory: historyForApi,
-        city: event.city,
-        area: event.area,
       );
 
-      final inScope = response['inScope'] != false;
-
-      // Add AI response to list
       _messages.add({
         'isUser': false,
         'text': response['message'],
-        'detectedService': inScope ? response['detectedService'] : null,
-        'estimatedPrice': inScope ? response['estimatedPrice'] : null,
         'timestamp': DateTime.now(),
       });
-
       emit(ChatbotResponseReceived(List.from(_messages)));
     } catch (e) {
-      emit(ChatbotError(e.toString()));
+      emit(ChatbotError(ErrorMapper.toUserMessage(e)));
       // Fallback state to keep existing messages visible
       emit(ChatbotResponseReceived(List.from(_messages)));
     }
@@ -74,6 +70,6 @@ class ChatbotBloc extends Bloc<ChatbotEvent, ChatbotState> {
 
   void _onResetChatbot(ResetChatbot event, Emitter<ChatbotState> emit) {
     _messages.clear();
-    emit(ChatbotInitial());
+    emit(const ChatbotInitial());
   }
 }

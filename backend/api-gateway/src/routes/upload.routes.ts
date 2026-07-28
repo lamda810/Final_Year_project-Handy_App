@@ -1,31 +1,16 @@
 import { Router, Request, Response } from 'express';
 import multer from 'multer';
-import { randomUUID } from 'crypto';
-import path from 'path';
-import fs from 'fs';
-import { fileURLToPath } from 'url';
-import { errorResponse, successResponse, HTTP_STATUS } from '@handy-go/shared';
+import { errorResponse, successResponse, HTTP_STATUS, logger } from '@handy-go/shared';
+import { uploadImage } from '@handy-go/user-service/dist/services/upload.service.js';
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
-
-// Local-disk storage for local dev — served back statically at /uploads
-// by the gateway (see index.ts). Swap for cloud storage (S3, etc.) if
-// this ever needs to run across multiple gateway instances.
-const uploadsDir = path.resolve(__dirname, '../../uploads');
-fs.mkdirSync(uploadsDir, { recursive: true });
-
-const storage = multer.diskStorage({
-  destination: (_req, _file, cb) => cb(null, uploadsDir),
-  filename: (_req, file, cb) => {
-    cb(null, `${randomUUID()}${path.extname(file.originalname)}`);
-  },
-});
-
+// Buffered in memory and streamed straight to Cloudinary — no local disk
+// write. Local disk doesn't survive across Render free-tier restarts/
+// redeploys (ephemeral filesystem), which made previously-uploaded images
+// disappear; Cloudinary gives us durable, CDN-backed storage instead.
 const ALLOWED_MIME_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/heic', 'image/heif'];
 
 const upload = multer({
-  storage,
+  storage: multer.memoryStorage(),
   limits: { fileSize: 5 * 1024 * 1024 },
   fileFilter: (_req, file, cb) => {
     if (ALLOWED_MIME_TYPES.includes(file.mimetype)) {
@@ -39,7 +24,7 @@ const upload = multer({
 const router: Router = Router();
 
 router.post('/', (req: Request, res: Response) => {
-  upload.single('image')(req, res, (err: unknown) => {
+  upload.single('image')(req, res, async (err: unknown) => {
     if (err) {
       const message = err instanceof Error ? err.message : 'Upload failed';
       return errorResponse(res, message, HTTP_STATUS.BAD_REQUEST);
@@ -48,10 +33,13 @@ router.post('/', (req: Request, res: Response) => {
       return errorResponse(res, 'No image file provided', HTTP_STATUS.BAD_REQUEST);
     }
 
-    const protocol = req.headers['x-forwarded-proto'] || req.protocol;
-    const url = `${protocol}://${req.get('host')}/uploads/${req.file.filename}`;
-
-    return successResponse(res, { url }, 'Image uploaded successfully', HTTP_STATUS.CREATED);
+    try {
+      const result = await uploadImage(req.file.buffer, 'handy-go/documents');
+      return successResponse(res, { url: result.url }, 'Image uploaded successfully', HTTP_STATUS.CREATED);
+    } catch (error) {
+      logger.error('Image upload failed:', error);
+      return errorResponse(res, 'Failed to upload image. Please try again.', HTTP_STATUS.INTERNAL_SERVER_ERROR);
+    }
   });
 });
 

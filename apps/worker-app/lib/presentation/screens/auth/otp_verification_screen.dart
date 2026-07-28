@@ -151,7 +151,7 @@ class _OtpVerificationScreenState extends State<OtpVerificationScreen> {
       child: Scaffold(
         appBar: AppBar(title: const Text('Verification')),
         body: SafeArea(
-          child: Padding(
+          child: SingleChildScrollView(
             padding: const EdgeInsets.all(AppSpacing.lg),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.center,
@@ -246,7 +246,7 @@ class _OtpVerificationScreenState extends State<OtpVerificationScreen> {
                     child: const Text('Resend Code'),
                   ),
 
-                const Spacer(),
+                const SizedBox(height: AppSpacing.xxl),
 
                 // Verify Button
                 ElevatedButton(

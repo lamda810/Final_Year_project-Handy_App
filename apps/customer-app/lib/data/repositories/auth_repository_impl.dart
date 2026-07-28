@@ -102,11 +102,11 @@ class AuthRepositoryImpl implements AuthRepository {
 
   @override
   Future<UserModel> login({
-    required String email,
+    required String phone,
     required String password,
   }) async {
     final response = await _remoteDataSource.login(
-      email: email,
+      phone: phone,
       password: password,
     );
 

@@ -31,7 +31,7 @@ export declare const SOS_PRIORITY_OBJ: {
 };
 export declare const SOS_STATUS: readonly ["ACTIVE", "RESOLVED", "ESCALATED", "FALSE_ALARM"];
 export type SOSStatus = (typeof SOS_STATUS)[number];
-export declare const OTP_PURPOSES: readonly ["REGISTRATION", "LOGIN", "PASSWORD_RESET"];
+export declare const OTP_PURPOSES: readonly ["REGISTRATION", "LOGIN", "PASSWORD_RESET", "JOB_START", "JOB_END"];
 export type OTPPurpose = (typeof OTP_PURPOSES)[number];
 export declare const NOTIFICATION_TYPES: readonly ["BOOKING", "PAYMENT", "SOS", "SYSTEM", "PROMOTION"];
 export type NotificationType = (typeof NOTIFICATION_TYPES)[number];

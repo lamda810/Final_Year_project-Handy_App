@@ -28,6 +28,7 @@ import {
   Tab,
   Rating,
   Grid,
+  Alert,
 } from '@mui/material';
 import {
   Search as SearchIcon,
@@ -38,11 +39,31 @@ import {
   Cancel as RejectIcon,
   Block as BlockIcon,
   Download as DownloadIcon,
+  Add as AddIcon,
+  Delete as DeleteIcon,
 } from '@mui/icons-material';
 import { useQuery } from '@tanstack/react-query';
 import { usersApi } from '../services';
 
 type DocumentReviewStatus = 'pending' | 'verified' | 'rejected';
+
+const SERVICE_CATEGORIES = [
+  'PLUMBING', 'ELECTRICAL', 'CLEANING', 'AC_REPAIR',
+  'CARPENTER', 'PAINTING', 'MECHANIC', 'GENERAL_HANDYMAN',
+] as const;
+
+const emptySkill = { category: '', experience: '', hourlyRate: '' };
+
+const emptyCreateForm = {
+  firstName: '',
+  lastName: '',
+  phone: '',
+  email: '',
+  password: '',
+  cnic: '',
+  status: 'PENDING_VERIFICATION' as 'PENDING_VERIFICATION' | 'ACTIVE',
+  skills: [{ ...emptySkill }],
+};
 
 interface Worker {
   _id: string;
@@ -104,6 +125,10 @@ export default function WorkersPage() {
     cnicBack: DocumentReviewStatus;
     profilePhoto: DocumentReviewStatus;
   }>({ cnicFront: 'pending', cnicBack: 'pending', profilePhoto: 'pending' });
+  const [createDialogOpen, setCreateDialogOpen] = useState(false);
+  const [createForm, setCreateForm] = useState(emptyCreateForm);
+  const [createError, setCreateError] = useState<string | null>(null);
+  const [creating, setCreating] = useState(false);
 
   const { data: workersData, isLoading, refetch } = useQuery({
     queryKey: ['workers', tabValue, page, rowsPerPage, searchQuery],
@@ -179,6 +204,65 @@ export default function WorkersPage() {
     setSelectedWorker(null);
   };
 
+  const handleOpenCreateDialog = () => {
+    setCreateForm(emptyCreateForm);
+    setCreateError(null);
+    setCreateDialogOpen(true);
+  };
+
+  const handleAddSkillRow = () => {
+    setCreateForm((f) => ({ ...f, skills: [...f.skills, { ...emptySkill }] }));
+  };
+
+  const handleRemoveSkillRow = (index: number) => {
+    setCreateForm((f) => ({ ...f, skills: f.skills.filter((_, i) => i !== index) }));
+  };
+
+  const handleSkillChange = (index: number, field: keyof typeof emptySkill, value: string) => {
+    setCreateForm((f) => ({
+      ...f,
+      skills: f.skills.map((s, i) => (i === index ? { ...s, [field]: value } : s)),
+    }));
+  };
+
+  const handleCreateWorker = async () => {
+    setCreateError(null);
+
+    if (!createForm.firstName || !createForm.lastName || !createForm.phone || !createForm.password || !createForm.cnic) {
+      setCreateError('Please fill in all required fields.');
+      return;
+    }
+
+    if (createForm.skills.some((s) => !s.category || s.experience === '' || s.hourlyRate === '')) {
+      setCreateError('Please complete all skill fields, or remove incomplete rows.');
+      return;
+    }
+
+    setCreating(true);
+    try {
+      await usersApi.createWorker({
+        firstName: createForm.firstName,
+        lastName: createForm.lastName,
+        phone: createForm.phone,
+        email: createForm.email || undefined,
+        password: createForm.password,
+        cnic: createForm.cnic,
+        status: createForm.status,
+        skills: createForm.skills.map((s) => ({
+          category: s.category,
+          experience: Number(s.experience),
+          hourlyRate: Number(s.hourlyRate),
+        })),
+      });
+      setCreateDialogOpen(false);
+      refetch();
+    } catch (error: any) {
+      setCreateError(error?.message || 'Failed to create worker');
+    } finally {
+      setCreating(false);
+    }
+  };
+
   const filteredWorkers = workers.filter((worker) => {
     if (tabValue === 1) return worker.status === 'PENDING_VERIFICATION';
     if (tabValue === 2) return worker.status === 'ACTIVE';
@@ -198,9 +282,14 @@ export default function WorkersPage() {
             Manage and verify service workers
           </Typography>
         </Box>
-        <Button variant="outlined" startIcon={<DownloadIcon />} onClick={() => exportToCsv('workers', workerColumns, filteredWorkers)}>
-          Export
-        </Button>
+        <Box sx={{ display: 'flex', gap: 1 }}>
+          <Button variant="outlined" startIcon={<DownloadIcon />} onClick={() => exportToCsv('workers', workerColumns, filteredWorkers)}>
+            Export
+          </Button>
+          <Button variant="contained" startIcon={<AddIcon />} onClick={handleOpenCreateDialog}>
+            Add Worker
+          </Button>
+        </Box>
       </Box>
 
       {/* Stats Cards */}
@@ -630,6 +719,144 @@ export default function WorkersPage() {
           </Button>
           <Button onClick={() => handleVerifyWorker(true)} variant="contained" color="success">
             Approve Application
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Create Worker Dialog */}
+      <Dialog open={createDialogOpen} onClose={() => setCreateDialogOpen(false)} maxWidth="sm" fullWidth>
+        <DialogTitle>Add Worker</DialogTitle>
+        <DialogContent>
+          {createError && (
+            <Alert severity="error" sx={{ mb: 2 }}>
+              {createError}
+            </Alert>
+          )}
+          <Grid container spacing={2} sx={{ mt: 0.5 }}>
+            <Grid size={{ xs: 6 }}>
+              <TextField
+                label="First Name"
+                fullWidth
+                required
+                value={createForm.firstName}
+                onChange={(e) => setCreateForm((f) => ({ ...f, firstName: e.target.value }))}
+              />
+            </Grid>
+            <Grid size={{ xs: 6 }}>
+              <TextField
+                label="Last Name"
+                fullWidth
+                required
+                value={createForm.lastName}
+                onChange={(e) => setCreateForm((f) => ({ ...f, lastName: e.target.value }))}
+              />
+            </Grid>
+            <Grid size={{ xs: 6 }}>
+              <TextField
+                label="Phone"
+                placeholder="03001234567"
+                fullWidth
+                required
+                value={createForm.phone}
+                onChange={(e) => setCreateForm((f) => ({ ...f, phone: e.target.value }))}
+              />
+            </Grid>
+            <Grid size={{ xs: 6 }}>
+              <TextField
+                label="Email (optional)"
+                fullWidth
+                value={createForm.email}
+                onChange={(e) => setCreateForm((f) => ({ ...f, email: e.target.value }))}
+              />
+            </Grid>
+            <Grid size={{ xs: 6 }}>
+              <TextField
+                label="CNIC"
+                placeholder="42101-1234567-1"
+                fullWidth
+                required
+                value={createForm.cnic}
+                onChange={(e) => setCreateForm((f) => ({ ...f, cnic: e.target.value }))}
+              />
+            </Grid>
+            <Grid size={{ xs: 6 }}>
+              <TextField
+                label="Password"
+                type="password"
+                fullWidth
+                required
+                value={createForm.password}
+                onChange={(e) => setCreateForm((f) => ({ ...f, password: e.target.value }))}
+              />
+            </Grid>
+            <Grid size={{ xs: 12 }}>
+              <TextField
+                select
+                label="Verification Status"
+                fullWidth
+                value={createForm.status}
+                onChange={(e) =>
+                  setCreateForm((f) => ({ ...f, status: e.target.value as typeof f.status }))
+                }
+              >
+                <MenuItem value="PENDING_VERIFICATION">Pending Verification</MenuItem>
+                <MenuItem value="ACTIVE">Active (skip verification)</MenuItem>
+              </TextField>
+            </Grid>
+          </Grid>
+
+          <Typography variant="subtitle2" sx={{ mt: 3, mb: 1 }}>
+            Skills
+          </Typography>
+          {createForm.skills.map((skill, index) => (
+            <Box key={index} sx={{ display: 'flex', gap: 1, mb: 1, alignItems: 'center' }}>
+              <TextField
+                select
+                label="Category"
+                size="small"
+                sx={{ flex: 2 }}
+                value={skill.category}
+                onChange={(e) => handleSkillChange(index, 'category', e.target.value)}
+              >
+                {SERVICE_CATEGORIES.map((cat) => (
+                  <MenuItem key={cat} value={cat}>
+                    {cat.replace('_', ' ')}
+                  </MenuItem>
+                ))}
+              </TextField>
+              <TextField
+                label="Years"
+                type="number"
+                size="small"
+                sx={{ flex: 1 }}
+                value={skill.experience}
+                onChange={(e) => handleSkillChange(index, 'experience', e.target.value)}
+              />
+              <TextField
+                label="Rate/hr"
+                type="number"
+                size="small"
+                sx={{ flex: 1 }}
+                value={skill.hourlyRate}
+                onChange={(e) => handleSkillChange(index, 'hourlyRate', e.target.value)}
+              />
+              <IconButton
+                size="small"
+                onClick={() => handleRemoveSkillRow(index)}
+                disabled={createForm.skills.length === 1}
+              >
+                <DeleteIcon fontSize="small" />
+              </IconButton>
+            </Box>
+          ))}
+          <Button size="small" startIcon={<AddIcon />} onClick={handleAddSkillRow}>
+            Add Skill
+          </Button>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setCreateDialogOpen(false)}>Cancel</Button>
+          <Button variant="contained" onClick={handleCreateWorker} disabled={creating}>
+            {creating ? 'Creating...' : 'Create Worker'}
           </Button>
         </DialogActions>
       </Dialog>

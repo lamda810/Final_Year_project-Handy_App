@@ -389,6 +389,13 @@ class _HomeScreenState extends State<HomeScreen> {
             ),
             actions: [
               IconButton(
+                icon: const Icon(Icons.auto_awesome_outlined),
+                tooltip: 'AI Assistant',
+                onPressed: () {
+                  Navigator.pushNamed(context, AppRoutes.aiAssistant);
+                },
+              ),
+              IconButton(
                 icon: Stack(
                   children: [
                     const Icon(Icons.notifications_outlined),

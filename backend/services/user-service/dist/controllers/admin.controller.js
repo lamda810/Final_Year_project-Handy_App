@@ -1,4 +1,4 @@
-import { Customer, Worker, User, asyncHandler, successResponse, errorResponse, notFoundResponse, paginatedResponse, HTTP_STATUS, DEFAULTS, } from '@handy-go/shared';
+import { Customer, Worker, User, Notification, asyncHandler, successResponse, errorResponse, notFoundResponse, paginatedResponse, HTTP_STATUS, DEFAULTS, } from '@handy-go/shared';
 /**
  * Get all customers (paginated)
  * GET /api/users/admin/customers
@@ -84,7 +84,7 @@ export const getPendingWorkers = asyncHandler(async (req, res) => {
  */
 export const verifyWorker = asyncHandler(async (req, res) => {
     const { workerId } = req.params;
-    const { status, notes } = req.body;
+    const { status, notes, documentDecisions } = req.body;
     if (!['ACTIVE', 'REJECTED'].includes(status)) {
         return errorResponse(res, 'Status must be ACTIVE or REJECTED', HTTP_STATUS.BAD_REQUEST);
     }
@@ -93,13 +93,37 @@ export const verifyWorker = asyncHandler(async (req, res) => {
         return notFoundResponse(res, 'Worker not found');
     }
     worker.status = status;
+    worker.verificationNotes = notes || undefined;
+    if (documentDecisions?.cnicFront)
+        worker.cnicFrontStatus = documentDecisions.cnicFront;
+    if (documentDecisions?.cnicBack)
+        worker.cnicBackStatus = documentDecisions.cnicBack;
+    if (documentDecisions?.profilePhoto)
+        worker.profilePhotoStatus = documentDecisions.profilePhoto;
     if (status === 'ACTIVE') {
         worker.cnicVerified = true;
-        // Verify all skills on approval
+        // Verify all skills, and any document not explicitly rejected above,
+        // on overall approval.
         worker.skills = worker.skills.map(skill => ({ ...skill, isVerified: true }));
+        if (worker.cnicFrontStatus !== 'rejected')
+            worker.cnicFrontStatus = 'verified';
+        if (worker.cnicBackStatus !== 'rejected')
+            worker.cnicBackStatus = 'verified';
+        if (worker.profilePhotoStatus !== 'rejected')
+            worker.profilePhotoStatus = 'verified';
     }
     await worker.save();
-    // TODO: Send notification to worker about verification status
+    await Notification.create({
+        recipient: worker.user,
+        type: 'SYSTEM',
+        title: status === 'ACTIVE' ? 'Verification approved' : 'Verification update',
+        body: status === 'ACTIVE'
+            ? 'Your account has been verified. You can now receive bookings.'
+            : notes
+                ? `Your verification was rejected: ${notes}`
+                : 'Your verification was rejected. Please check your documents and re-upload.',
+        data: { action: 'WORKER_VERIFICATION', status },
+    });
     return successResponse(res, worker, `Worker ${status === 'ACTIVE' ? 'approved' : 'rejected'} successfully`);
 });
 /**

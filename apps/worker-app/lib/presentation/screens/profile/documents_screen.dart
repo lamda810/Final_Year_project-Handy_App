@@ -222,20 +222,38 @@ class _DocumentsScreenState extends State<DocumentsScreen> {
 
     if (source == null) return;
 
-    final picker = ImagePicker();
-    final XFile? image = source == 'camera'
-        ? await picker.pickImage(
-            source: ImageSource.camera,
-            maxWidth: 1200,
-            maxHeight: 1200,
-            imageQuality: 80,
-          )
-        : await picker.pickImage(
-            source: ImageSource.gallery,
-            maxWidth: 1200,
-            maxHeight: 1200,
-            imageQuality: 80,
-          );
+    XFile? image;
+    try {
+      final picker = ImagePicker();
+      image = source == 'camera'
+          ? await picker.pickImage(
+              source: ImageSource.camera,
+              maxWidth: 1200,
+              maxHeight: 1200,
+              imageQuality: 80,
+            )
+          : await picker.pickImage(
+              source: ImageSource.gallery,
+              maxWidth: 1200,
+              maxHeight: 1200,
+              imageQuality: 80,
+            );
+    } catch (e) {
+      // e.g. camera/gallery permission denied, or no camera on the device.
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              'Could not access ${source == 'camera' ? 'camera' : 'gallery'}: '
+              '${e.toString().replaceAll("Exception: ", "")}',
+            ),
+            backgroundColor: AppColors.error,
+          ),
+        );
+      }
+      return;
+    }
+
     if (image != null) {
       setState(() => _isLoading = true);
       try {

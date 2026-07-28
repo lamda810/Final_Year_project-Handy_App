@@ -1,7 +1,26 @@
-import { Booking, Worker, asyncHandler, successResponse, errorResponse, notFoundResponse, paginatedResponse, HTTP_STATUS, DEFAULTS, } from '@handy-go/shared';
+import { Booking, Worker, OTP, asyncHandler, successResponse, errorResponse, notFoundResponse, paginatedResponse, HTTP_STATUS, DEFAULTS, } from '@handy-go/shared';
 import notificationService from '../services/notification.service.js';
 import pricingService from '../services/pricing.service.js';
 import matchingService from '../services/matching.service.js';
+/**
+ * Verify a job-start/job-end OTP the customer read aloud to the worker.
+ * The OTP is keyed on the booking's customer's phone (proof the worker is
+ * physically with that customer) — same dummy-code mechanism as auth OTPs
+ * (OTP.createOTP always issues "123456"; see OTP.ts), just a different
+ * purpose so it doesn't collide with login/registration codes.
+ */
+const verifyJobOtp = async (customerPhone, purpose, code) => {
+    const otp = await OTP.findValidOTP(customerPhone, purpose);
+    if (!otp) {
+        return { success: false, error: 'OTP expired or not requested. Ask the customer to share a new code.' };
+    }
+    if (!otp.verify(code)) {
+        await otp.incrementAttempts();
+        return { success: false, error: 'Invalid OTP code' };
+    }
+    await otp.markAsUsed();
+    return { success: true };
+};
 // 'contactPhone' is the optional alternate number set on the Customer
 // profile; nested-populating 'user' with 'phone' provides the fallback
 // login phone for the worker's "call customer" button when no
@@ -156,7 +175,7 @@ export const rejectBooking = asyncHandler(async (req, res) => {
 export const startJob = asyncHandler(async (req, res) => {
     const userId = req.user.id;
     const { bookingId } = req.params;
-    const { beforeImages } = req.body;
+    const { beforeImages, otpCode } = req.body;
     const worker = await Worker.findOne({ user: userId });
     if (!worker) {
         return notFoundResponse(res, 'Worker profile not found');
@@ -168,6 +187,11 @@ export const startJob = asyncHandler(async (req, res) => {
     }).populate(customerPopulateWithPhone);
     if (!booking) {
         return notFoundResponse(res, 'Booking not found or not in accepted status');
+    }
+    const customerPhone = booking.customer.contactPhone || booking.customer.user.phone;
+    const otpResult = await verifyJobOtp(customerPhone, 'JOB_START', otpCode);
+    if (!otpResult.success) {
+        return errorResponse(res, otpResult.error, HTTP_STATUS.BAD_REQUEST);
     }
     // Update booking status
     booking.status = 'IN_PROGRESS';
@@ -195,7 +219,7 @@ export const startJob = asyncHandler(async (req, res) => {
 export const completeJob = asyncHandler(async (req, res) => {
     const userId = req.user.id;
     const { bookingId } = req.params;
-    const { afterImages, finalPrice, materialsCost, notes } = req.body;
+    const { afterImages, finalPrice, materialsCost, notes, otpCode } = req.body;
     const worker = await Worker.findOne({ user: userId });
     if (!worker) {
         return notFoundResponse(res, 'Worker profile not found');
@@ -208,10 +232,18 @@ export const completeJob = asyncHandler(async (req, res) => {
     if (!booking) {
         return notFoundResponse(res, 'Booking not found or not in progress');
     }
-    // The price is decided at booking creation (estimatedPrice) and the
+    const customerPhone = booking.customer.contactPhone || booking.customer.user.phone;
+    const otpResult = await verifyJobOtp(customerPhone, 'JOB_END', otpCode);
+    if (!otpResult.success) {
+        return errorResponse(res, otpResult.error, HTTP_STATUS.BAD_REQUEST);
+    }
+    // The price is decided at booking creation (estimatedPrice), and may be
+    // renegotiated via chat before the job starts (negotiatedPrice) — the
     // worker no longer re-enters it on completion — only fall back to a
     // client-sent finalPrice if one is explicitly provided.
-    const laborCost = typeof finalPrice === 'number' ? finalPrice : (booking.pricing.estimatedPrice || 0);
+    const laborCost = typeof finalPrice === 'number'
+        ? finalPrice
+        : (booking.pricing.negotiatedPrice ?? booking.pricing.estimatedPrice ?? 0);
     // Calculate pricing
     const pricing = pricingService.calculatePricing({
         laborCost,

@@ -13,10 +13,6 @@ export const publicRoutes = [
   '/',
   '/health',
   '/api/health',
-  // Uploaded files are served statically and referenced by URL from
-  // authenticated responses (e.g. booking images) — the URL itself is
-  // the access control, same as any other static asset host.
-  '/uploads',
   // Internal service-to-service endpoints, protected by their own
   // authenticateService (X-Service-Key) check at the router level rather
   // than a client JWT. Before all services were merged into this one

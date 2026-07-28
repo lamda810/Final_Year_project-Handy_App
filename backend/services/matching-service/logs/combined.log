@@ -328,3 +328,7 @@
 {"level":"info","message":"Matching Service running on port 3004","service":"handy-go","timestamp":"2026-07-20 21:24:25"}
 {"level":"info","message":"Environment: development","service":"handy-go","timestamp":"2026-07-20 21:24:25"}
 {"level":"info","message":"SIGTERM received. Shutting down gracefully...","service":"handy-go","timestamp":"2026-07-21 00:51:19"}
+{"level":"info","message":"Connected to MongoDB","service":"handy-go","timestamp":"2026-07-26 14:26:19"}
+{"level":"info","message":"Matching Service running on port 3004","service":"handy-go","timestamp":"2026-07-26 14:26:19"}
+{"level":"info","message":"Environment: development","service":"handy-go","timestamp":"2026-07-26 14:26:19"}
+{"level":"info","message":"SIGTERM received. Shutting down gracefully...","service":"handy-go","timestamp":"2026-07-26 14:26:22"}

@@ -80,21 +80,13 @@ class AuthRemoteDataSourceImpl implements AuthRemoteDataSource {
 
   @override
   Future<AuthResponse> login({
-    required String email,
+    required String phone,
     required String password,
   }) async {
-    // Customer accounts are now phone-verified at signup (email is not
-    // collected), but the backend's /auth/login accepts either — so route
-    // whatever was typed to the right field rather than always sending it
-    // as "email", which would reject a phone number outright.
-    final isEmail = email.contains('@');
-
     try {
       final response = await _dio.post(
         ApiEndpoints.login,
-        data: isEmail
-            ? {'email': email, 'password': password}
-            : {'phone': email, 'password': password},
+        data: {'phone': phone, 'password': password},
       );
 
       return AuthResponse.fromJson(response.data);

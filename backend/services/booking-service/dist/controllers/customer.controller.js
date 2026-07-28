@@ -1,6 +1,6 @@
 import mongoose from 'mongoose';
 import { randomBytes } from 'crypto';
-import { Booking, Customer, Worker, Review, asyncHandler, successResponse, errorResponse, notFoundResponse, paginatedResponse, HTTP_STATUS, DEFAULTS, } from '@handy-go/shared';
+import { Booking, Customer, Worker, Review, OTP, asyncHandler, successResponse, errorResponse, notFoundResponse, paginatedResponse, HTTP_STATUS, DEFAULTS, } from '@handy-go/shared';
 import { config } from '../config/index.js';
 import matchingService from '../services/matching.service.js';
 import notificationService from '../services/notification.service.js';
@@ -321,5 +321,37 @@ export const rateBooking = asyncHandler(async (req, res) => {
     // Notify worker
     await notificationService.notifyRatingReceived(booking.worker.user.toString(), rating, booking.bookingNumber);
     return successResponse(res, newReview, 'Rating submitted successfully');
+});
+/**
+ * Request/reveal the job-start or job-end OTP for a booking, so the
+ * customer can read it aloud to the worker as proof of presence. Generates
+ * a fresh dummy code (always "123456" — see OTP.createOTP) each time it's
+ * called, same as the auth OTP flows.
+ * GET /api/bookings/:bookingId/job-otp?purpose=JOB_START|JOB_END
+ */
+export const getJobOtp = asyncHandler(async (req, res) => {
+    const userId = req.user.id;
+    const { bookingId } = req.params;
+    const purpose = req.query.purpose === 'JOB_END' ? 'JOB_END' : 'JOB_START';
+    const customer = await Customer.findOne({ user: userId }).populate('user', 'phone');
+    if (!customer) {
+        return notFoundResponse(res, 'Customer profile not found');
+    }
+    const requiredStatus = purpose === 'JOB_START' ? 'ACCEPTED' : 'IN_PROGRESS';
+    const booking = await Booking.findOne({
+        _id: bookingId,
+        customer: customer._id,
+        status: requiredStatus,
+    });
+    if (!booking) {
+        return notFoundResponse(res, `Booking not found or not ${purpose === 'JOB_START' ? 'awaiting start' : 'in progress'}`);
+    }
+    const customerPhone = customer.contactPhone || customer.user.phone;
+    const otp = await OTP.createOTP(customerPhone, purpose);
+    // The model's toJSON transform strips `code` from every response by
+    // design (OTP.ts) — this is the one legitimate case where the requesting
+    // party IS the code's intended reader, so it's surfaced explicitly here
+    // rather than via the stripped document.
+    return successResponse(res, { code: otp.code, expiresAt: otp.expiresAt, purpose }, 'OTP generated');
 });
 //# sourceMappingURL=customer.controller.js.map

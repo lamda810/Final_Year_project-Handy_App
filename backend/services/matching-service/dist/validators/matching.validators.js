@@ -43,6 +43,13 @@ export const autoReplaceWorkerSchema = Joi.object({
 });
 export const chatAssistantSchema = Joi.object({
     message: Joi.string().min(1).max(500).required().trim(),
+    conversationHistory: Joi.array()
+        .items(Joi.object({
+        role: Joi.string().valid('user', 'assistant').required(),
+        content: Joi.string().min(1).max(1000).required(),
+    }))
+        .max(20)
+        .optional(),
     contextData: Joi.object({
         city: Joi.string().optional(),
         area: Joi.string().optional(),

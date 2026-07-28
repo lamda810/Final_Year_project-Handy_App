@@ -3,16 +3,11 @@ import cors from 'cors';
 import helmet from 'helmet';
 import morgan from 'morgan';
 import compression from 'compression';
-import path from 'path';
-import { fileURLToPath } from 'url';
 import mongoose from 'mongoose';
 import { logger } from '@handy-go/shared';
 import { config } from './config/index.js';
 import { authenticate } from './middleware/auth.js';
 import uploadRoutes from './routes/upload.routes.js';
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
 import {
   generalRateLimiter,
   authRateLimiter,
@@ -126,10 +121,6 @@ app.get('/health', (req, res) => {
     mongodb: mongoose.connection.readyState === 1 ? 'connected' : 'disconnected',
   });
 });
-
-// Uploaded images (booking photos, profile photos, etc.) — local-disk
-// storage served statically. Public per config/routes.ts's publicRoutes.
-app.use('/uploads', express.static(path.resolve(__dirname, '../uploads')));
 
 app.get('/api/health', (req, res) => {
   res.json({

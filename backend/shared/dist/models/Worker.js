@@ -142,6 +142,28 @@ const workerSchema = new Schema({
         front: String,
         back: String,
     },
+    cnicFrontImage: String,
+    cnicBackImage: String,
+    cnicFrontStatus: {
+        type: String,
+        enum: ['pending', 'verified', 'rejected'],
+        default: 'pending',
+    },
+    cnicBackStatus: {
+        type: String,
+        enum: ['pending', 'verified', 'rejected'],
+        default: 'pending',
+    },
+    profilePhotoStatus: {
+        type: String,
+        enum: ['pending', 'verified', 'rejected'],
+        default: 'pending',
+    },
+    verificationNotes: {
+        type: String,
+        trim: true,
+        maxlength: 500,
+    },
     skills: {
         type: [skillSchema],
         required: [true, 'At least one skill is required'],

@@ -1,15 +1,15 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+
+import '../../../core/constants/app_colors.dart';
+import '../../../core/constants/app_spacing.dart';
+import '../../../injection_container.dart';
 import '../../blocs/chatbot/chatbot_bloc.dart';
 import '../../blocs/chatbot/chatbot_event.dart';
 import '../../blocs/chatbot/chatbot_state.dart';
-import '../../blocs/user/user_bloc.dart';
-import '../../blocs/user/user_state.dart';
-import '../../../core/constants/app_colors.dart';
-import '../../../core/constants/app_spacing.dart';
-import '../../../core/constants/app_typography.dart';
-import '../../../core/routes/app_routes.dart';
 
+/// AI assistant for workers — answers questions about jobs, earnings,
+/// documents, and how to use the app. Scoped server-side to Handy-Go topics.
 class AIAssistantScreen extends StatefulWidget {
   const AIAssistantScreen({super.key});
 
@@ -23,10 +23,10 @@ class _AIAssistantScreenState extends State<AIAssistantScreen> {
   final FocusNode _inputFocusNode = FocusNode();
 
   static const List<String> _quickPrompts = [
-    'My tap is leaking',
-    'AC not cooling',
-    'Track my booking',
-    'How do I cancel?',
+    'How do I start a job?',
+    'How do withdrawals work?',
+    'Why is my document rejected?',
+    'How is trust score calculated?',
   ];
 
   @override
@@ -51,57 +51,64 @@ class _AIAssistantScreenState extends State<AIAssistantScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
-
-    return Scaffold(
-      backgroundColor: colorScheme.surface,
-      appBar: _buildAppBar(),
-      body: Column(
-        children: [
-          Expanded(
-            child: BlocConsumer<ChatbotBloc, ChatbotState>(
-              listener: (context, state) {
-                if (state is ChatbotResponseReceived || state is ChatbotLoading) {
-                  _scrollToBottom();
-                }
-              },
-              builder: (context, state) {
-                if (state is ChatbotInitial) {
-                  return _buildEmptyState(context);
-                }
-
-                List<Map<String, dynamic>> messages = [];
-                if (state is ChatbotResponseReceived) {
-                  messages = state.messages;
-                }
-
-                return ListView.builder(
-                  controller: _scrollController,
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: AppSpacing.md,
-                    vertical: AppSpacing.md,
-                  ),
-                  itemCount: messages.length + (state is ChatbotLoading ? 1 : 0),
-                  itemBuilder: (context, index) {
-                    if (index == messages.length) {
-                      return _buildTypingIndicator(context);
+    return BlocProvider<ChatbotBloc>(
+      create: (_) => sl<ChatbotBloc>(),
+      // Builder gives us a context below BlocProvider, so the Scaffold
+      // (including its AppBar) can look up ChatbotBloc via context.read.
+      // Passing the outer build(context) straight into Scaffold would put
+      // the AppBar's context above the provider, where the bloc isn't
+      // registered yet — that's what threw the "Could not find the
+      // correct Provider<ChatbotBloc>" error from the refresh button.
+      child: Builder(
+        builder: (context) => Scaffold(
+          backgroundColor: Theme.of(context).colorScheme.surface,
+          appBar: _buildAppBar(context),
+          body: Column(
+            children: [
+              Expanded(
+                child: BlocConsumer<ChatbotBloc, ChatbotState>(
+                  listener: (context, state) {
+                    if (state is ChatbotResponseReceived || state is ChatbotLoading) {
+                      _scrollToBottom();
+                    }
+                  },
+                  builder: (context, state) {
+                    if (state is ChatbotInitial) {
+                      return _buildEmptyState(context);
                     }
 
-                    final msg = messages[index];
-                    return _buildMessageBubble(context, msg);
+                    List<Map<String, dynamic>> messages = [];
+                    if (state is ChatbotResponseReceived) {
+                      messages = state.messages;
+                    }
+
+                    return ListView.builder(
+                      controller: _scrollController,
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: AppSpacing.md,
+                        vertical: AppSpacing.md,
+                      ),
+                      itemCount: messages.length + (state is ChatbotLoading ? 1 : 0),
+                      itemBuilder: (context, index) {
+                        if (index == messages.length) {
+                          return _buildTypingIndicator(context);
+                        }
+                        return _buildMessageBubble(context, messages[index]);
+                      },
+                    );
                   },
-                );
-              },
-            ),
+                ),
+              ),
+              _buildQuickPrompts(context),
+              _buildInputArea(context),
+            ],
           ),
-          _buildQuickPrompts(context),
-          _buildInputArea(context),
-        ],
+        ),
       ),
     );
   }
 
-  PreferredSizeWidget _buildAppBar() {
+  PreferredSizeWidget _buildAppBar(BuildContext context) {
     return AppBar(
       titleSpacing: 0,
       title: Row(
@@ -120,10 +127,13 @@ class _AIAssistantScreenState extends State<AIAssistantScreen> {
             crossAxisAlignment: CrossAxisAlignment.start,
             mainAxisSize: MainAxisSize.min,
             children: [
-              Text('Handy Assistant', style: AppTypography.h6),
+              const Text(
+                'Handy Assistant',
+                style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+              ),
               Text(
-                'AI-powered • Handy-Go support',
-                style: AppTypography.caption.copyWith(color: AppColors.textSecondary),
+                'AI-powered • Worker support',
+                style: TextStyle(fontSize: 12, color: AppColors.textSecondary),
               ),
             ],
           ),
@@ -134,7 +144,7 @@ class _AIAssistantScreenState extends State<AIAssistantScreen> {
           tooltip: 'Start a new conversation',
           icon: const Icon(Icons.refresh_rounded),
           onPressed: () {
-            context.read<ChatbotBloc>().add(ResetChatbot());
+            context.read<ChatbotBloc>().add(const ResetChatbot());
           },
         ),
       ],
@@ -158,17 +168,17 @@ class _AIAssistantScreenState extends State<AIAssistantScreen> {
               child: const Icon(Icons.auto_awesome, size: 40, color: Colors.white),
             ),
             const SizedBox(height: AppSpacing.lg),
-            Text(
+            const Text(
               'How can I help you today?',
               textAlign: TextAlign.center,
-              style: AppTypography.h5,
+              style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
             ),
             const SizedBox(height: AppSpacing.sm),
             Text(
-              'Describe your problem and I\'ll find the right service, '
-              'estimate the price, or answer questions about your bookings.',
+              'Ask about accepting jobs, the start/complete OTP flow, '
+              'earnings, withdrawals, or your documents.',
               textAlign: TextAlign.center,
-              style: AppTypography.bodyMedium.copyWith(color: AppColors.textSecondary),
+              style: TextStyle(fontSize: 14, color: AppColors.textSecondary),
             ),
             const SizedBox(height: AppSpacing.xl),
             Wrap(
@@ -176,10 +186,7 @@ class _AIAssistantScreenState extends State<AIAssistantScreen> {
               runSpacing: AppSpacing.sm,
               alignment: WrapAlignment.center,
               children: _quickPrompts.map((prompt) {
-                return _PromptChip(
-                  label: prompt,
-                  onTap: () => _sendText(prompt),
-                );
+                return _PromptChip(label: prompt, onTap: () => _sendText(context, prompt));
               }).toList(),
             ),
           ],
@@ -194,15 +201,15 @@ class _AIAssistantScreenState extends State<AIAssistantScreen> {
         if (state is! ChatbotResponseReceived || state.messages.isEmpty) {
           return const SizedBox.shrink();
         }
-        return Container(
-          padding: const EdgeInsets.only(left: AppSpacing.md, top: AppSpacing.sm),
+        return SizedBox(
           height: 44,
           child: ListView(
+            padding: const EdgeInsets.only(left: AppSpacing.md, top: AppSpacing.sm),
             scrollDirection: Axis.horizontal,
             children: _quickPrompts.map((prompt) {
               return Padding(
                 padding: const EdgeInsets.only(right: AppSpacing.sm),
-                child: _PromptChip(label: prompt, onTap: () => _sendText(prompt)),
+                child: _PromptChip(label: prompt, onTap: () => _sendText(context, prompt)),
               );
             }).toList(),
           ),
@@ -226,40 +233,31 @@ class _AIAssistantScreenState extends State<AIAssistantScreen> {
             const SizedBox(width: AppSpacing.sm),
           ],
           Flexible(
-            child: Column(
-              crossAxisAlignment:
-                  isUser ? CrossAxisAlignment.end : CrossAxisAlignment.start,
-              children: [
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: AppSpacing.md,
-                    vertical: AppSpacing.sm + 2,
-                  ),
-                  constraints: BoxConstraints(
-                    maxWidth: MediaQuery.of(context).size.width * 0.72,
-                  ),
-                  decoration: BoxDecoration(
-                    gradient: isUser ? AppColors.primaryGradient : null,
-                    color: isUser ? null : colorScheme.surfaceContainerHighest,
-                    borderRadius: BorderRadius.only(
-                      topLeft: const Radius.circular(AppSpacing.radiusLg),
-                      topRight: const Radius.circular(AppSpacing.radiusLg),
-                      bottomLeft: Radius.circular(isUser ? AppSpacing.radiusLg : 4),
-                      bottomRight: Radius.circular(isUser ? 4 : AppSpacing.radiusLg),
-                    ),
-                  ),
-                  child: Text(
-                    msg['text'] ?? '',
-                    style: AppTypography.bodyMedium.copyWith(
-                      color: isUser ? Colors.white : colorScheme.onSurface,
-                    ),
-                  ),
+            child: Container(
+              padding: const EdgeInsets.symmetric(
+                horizontal: AppSpacing.md,
+                vertical: AppSpacing.sm + 2,
+              ),
+              constraints: BoxConstraints(
+                maxWidth: MediaQuery.of(context).size.width * 0.72,
+              ),
+              decoration: BoxDecoration(
+                gradient: isUser ? AppColors.primaryGradient : null,
+                color: isUser ? null : colorScheme.surfaceContainerHighest,
+                borderRadius: BorderRadius.only(
+                  topLeft: const Radius.circular(AppSpacing.radiusLG),
+                  topRight: const Radius.circular(AppSpacing.radiusLG),
+                  bottomLeft: Radius.circular(isUser ? AppSpacing.radiusLG : 4),
+                  bottomRight: Radius.circular(isUser ? 4 : AppSpacing.radiusLG),
                 ),
-                if (!isUser && msg['detectedService'] != null) ...[
-                  const SizedBox(height: AppSpacing.sm),
-                  _buildAISuggestionCard(context, msg),
-                ],
-              ],
+              ),
+              child: Text(
+                msg['text'] ?? '',
+                style: TextStyle(
+                  fontSize: 14,
+                  color: isUser ? Colors.white : colorScheme.onSurface,
+                ),
+              ),
             ),
           ),
           if (isUser) const SizedBox(width: AppSpacing.sm + 28),
@@ -297,9 +295,9 @@ class _AIAssistantScreenState extends State<AIAssistantScreen> {
             decoration: BoxDecoration(
               color: colorScheme.surfaceContainerHighest,
               borderRadius: const BorderRadius.only(
-                topLeft: Radius.circular(AppSpacing.radiusLg),
-                topRight: Radius.circular(AppSpacing.radiusLg),
-                bottomRight: Radius.circular(AppSpacing.radiusLg),
+                topLeft: Radius.circular(AppSpacing.radiusLG),
+                topRight: Radius.circular(AppSpacing.radiusLG),
+                bottomRight: Radius.circular(AppSpacing.radiusLG),
               ),
             ),
             child: const _TypingDots(),
@@ -309,90 +307,10 @@ class _AIAssistantScreenState extends State<AIAssistantScreen> {
     );
   }
 
-  Widget _buildAISuggestionCard(BuildContext context, Map<String, dynamic> msg) {
-    final category = (msg['detectedService'] as String?) ?? '';
-    final categoryLabel = _formatCategory(category);
-    final categoryColor = _categoryColor(category);
-    final price = msg['estimatedPrice'] as Map<String, dynamic>?;
-
-    return Container(
-      constraints: BoxConstraints(maxWidth: MediaQuery.of(context).size.width * 0.72),
-      decoration: BoxDecoration(
-        color: Theme.of(context).colorScheme.surface,
-        borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
-        border: Border.all(color: AppColors.border),
-        boxShadow: const [
-          BoxShadow(color: AppColors.shadowLight, blurRadius: 6, offset: Offset(0, 2)),
-        ],
-      ),
-      padding: const EdgeInsets.all(AppSpacing.cardPaddingSmall),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Container(
-                padding: const EdgeInsets.all(6),
-                decoration: BoxDecoration(
-                  color: categoryColor.withValues(alpha: 0.12),
-                  borderRadius: BorderRadius.circular(AppSpacing.radiusSm),
-                ),
-                child: Icon(Icons.build_circle_rounded, color: categoryColor, size: 18),
-              ),
-              const SizedBox(width: AppSpacing.sm),
-              Expanded(
-                child: Text(
-                  categoryLabel,
-                  style: AppTypography.labelLarge,
-                ),
-              ),
-            ],
-          ),
-          if (price != null) ...[
-            const SizedBox(height: AppSpacing.xs),
-            Padding(
-              padding: const EdgeInsets.only(left: 2),
-              child: Text(
-                'Est. Rs ${price['min']} - ${price['max']}',
-                style: AppTypography.bodySmall.copyWith(
-                  color: AppColors.success,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-            ),
-          ],
-          const SizedBox(height: AppSpacing.sm),
-          SizedBox(
-            width: double.infinity,
-            child: ElevatedButton.icon(
-              style: ElevatedButton.styleFrom(
-                padding: const EdgeInsets.symmetric(vertical: AppSpacing.sm),
-              ),
-              onPressed: () {
-                Navigator.pushNamed(
-                  context,
-                  AppRoutes.serviceSelection,
-                  arguments: {'category': category},
-                );
-              },
-              icon: const Icon(Icons.arrow_forward_rounded, size: 16),
-              label: const Text('Book this service'),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
   Widget _buildInputArea(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
     return Container(
-      padding: const EdgeInsets.fromLTRB(
-        AppSpacing.sm,
-        AppSpacing.sm,
-        AppSpacing.sm,
-        AppSpacing.sm,
-      ),
+      padding: const EdgeInsets.all(AppSpacing.sm),
       decoration: BoxDecoration(
         color: colorScheme.surface,
         boxShadow: const [
@@ -407,7 +325,7 @@ class _AIAssistantScreenState extends State<AIAssistantScreen> {
               child: Container(
                 decoration: BoxDecoration(
                   color: colorScheme.surfaceContainerHighest,
-                  borderRadius: BorderRadius.circular(AppSpacing.radiusXl),
+                  borderRadius: BorderRadius.circular(AppSpacing.radiusXL),
                 ),
                 child: TextField(
                   controller: _messageController,
@@ -415,16 +333,16 @@ class _AIAssistantScreenState extends State<AIAssistantScreen> {
                   minLines: 1,
                   maxLines: 4,
                   textCapitalization: TextCapitalization.sentences,
-                  style: AppTypography.bodyMedium,
+                  style: const TextStyle(fontSize: 14),
                   decoration: const InputDecoration(
-                    hintText: 'Describe your problem...',
+                    hintText: 'Ask about jobs, earnings, documents...',
                     border: InputBorder.none,
                     contentPadding: EdgeInsets.symmetric(
                       horizontal: AppSpacing.md,
                       vertical: AppSpacing.sm + 2,
                     ),
                   ),
-                  onSubmitted: (_) => _sendMessage(),
+                  onSubmitted: (_) => _sendMessage(context),
                 ),
               ),
             ),
@@ -448,7 +366,7 @@ class _AIAssistantScreenState extends State<AIAssistantScreen> {
                             ),
                           )
                         : const Icon(Icons.send_rounded, color: Colors.white),
-                    onPressed: isLoading ? null : _sendMessage,
+                    onPressed: isLoading ? null : () => _sendMessage(context),
                   ),
                 );
               },
@@ -459,63 +377,20 @@ class _AIAssistantScreenState extends State<AIAssistantScreen> {
     );
   }
 
-  String _formatCategory(String category) {
-    return category
-        .split('_')
-        .map((w) => w.isEmpty ? w : '${w[0]}${w.substring(1).toLowerCase()}')
-        .join(' ');
-  }
-
-  Color _categoryColor(String category) {
-    switch (category) {
-      case 'PLUMBING':
-        return AppColors.plumbing;
-      case 'ELECTRICAL':
-        return AppColors.electrical;
-      case 'CLEANING':
-        return AppColors.cleaning;
-      case 'AC_REPAIR':
-        return AppColors.acRepair;
-      case 'CARPENTER':
-        return AppColors.carpenter;
-      case 'PAINTING':
-        return AppColors.painting;
-      case 'MECHANIC':
-        return AppColors.mechanic;
-      default:
-        return AppColors.handyman;
-    }
-  }
-
-  void _sendText(String text) {
+  void _sendText(BuildContext context, String text) {
     _messageController.text = text;
-    _sendMessage();
+    _sendMessage(context);
   }
 
-  void _sendMessage() {
-    if (_messageController.text.trim().isEmpty) return;
+  // Takes context explicitly rather than using the State's own `context`
+  // (the outer build(context), above the screen-local BlocProvider) —
+  // every call site below passes the context from inside Builder/
+  // BlocBuilder, which is where ChatbotBloc is actually registered.
+  void _sendMessage(BuildContext context) {
+    final text = _messageController.text.trim();
+    if (text.isEmpty) return;
 
-    // Get user context from UserBloc if available
-    String? city;
-    String? area;
-    final userState = context.read<UserBloc>().state;
-    if (userState is UserProfileLoaded) {
-      final defaultAddress = userState.addresses.where((address) => address.isDefault).firstOrNull ??
-          userState.addresses.firstOrNull;
-      if (defaultAddress != null) {
-        city = defaultAddress.city;
-        area = defaultAddress.label;
-      }
-    }
-
-    context.read<ChatbotBloc>().add(
-      SendChatMessage(
-        message: _messageController.text.trim(),
-        city: city,
-        area: area,
-      ),
-    );
-
+    context.read<ChatbotBloc>().add(SendChatMessage(message: text));
     _messageController.clear();
   }
 }
@@ -543,7 +418,11 @@ class _PromptChip extends StatelessWidget {
         ),
         child: Text(
           label,
-          style: AppTypography.labelMedium.copyWith(color: AppColors.primary),
+          style: const TextStyle(
+            fontSize: 12,
+            fontWeight: FontWeight.w500,
+            color: AppColors.primary,
+          ),
         ),
       ),
     );
@@ -589,7 +468,7 @@ class _TypingDotsState extends State<_TypingDots> with SingleTickerProviderState
               final t = (_controller.value - (i * 0.2)) % 1.0;
               final scale = t < 0.5 ? (0.6 + t) : (1.6 - t);
               return Opacity(
-                opacity: (scale).clamp(0.3, 1.0),
+                opacity: scale.clamp(0.3, 1.0),
                 child: Container(
                   width: 6,
                   height: 6,

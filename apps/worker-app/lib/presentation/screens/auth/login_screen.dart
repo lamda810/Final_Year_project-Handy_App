@@ -6,6 +6,7 @@ import '../../blocs/auth/auth_state.dart';
 import '../../routes/app_routes.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/constants/app_spacing.dart';
+import '../../../core/utils/validators.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -16,7 +17,7 @@ class LoginScreen extends StatefulWidget {
 
 class _LoginScreenState extends State<LoginScreen> {
   final _formKey = GlobalKey<FormState>();
-  final _emailController = TextEditingController();
+  final _phoneController = TextEditingController();
   final _passwordController = TextEditingController();
 
   bool _obscurePassword = true;
@@ -24,16 +25,26 @@ class _LoginScreenState extends State<LoginScreen> {
 
   @override
   void dispose() {
-    _emailController.dispose();
+    _phoneController.dispose();
     _passwordController.dispose();
     super.dispose();
   }
 
   void _login() {
     if (_formKey.currentState?.validate() ?? false) {
-      final email = _emailController.text.trim().toLowerCase();
+      // Same +92 normalization used at registration/forgot-password so a
+      // worker can log in with 03XX..., 3XX..., or +923XX... interchangeably.
+      final cleaned = _phoneController.text.trim().replaceAll(
+        RegExp(r'[\s\-\(\)]'),
+        '',
+      );
+      final phone = cleaned.startsWith('+92')
+          ? cleaned
+          : cleaned.startsWith('0')
+          ? '+92${cleaned.substring(1)}'
+          : '+92$cleaned';
       context.read<AuthBloc>().add(
-        LoginRequested(email: email, password: _passwordController.text),
+        LoginRequested(phone: phone, password: _passwordController.text),
       );
     }
   }
@@ -125,28 +136,17 @@ class _LoginScreenState extends State<LoginScreen> {
 
                     const SizedBox(height: AppSpacing.xl),
 
-                    // Email Input
+                    // Phone Input
                     TextFormField(
-                      controller: _emailController,
-                      keyboardType: TextInputType.emailAddress,
-                      autofillHints: const [AutofillHints.email],
+                      controller: _phoneController,
+                      keyboardType: TextInputType.phone,
+                      autofillHints: const [AutofillHints.telephoneNumber],
                       decoration: const InputDecoration(
-                        labelText: 'Email Address',
-                        hintText: 'you@example.com',
-                        prefixIcon: Icon(Icons.email_outlined),
+                        labelText: 'Phone Number',
+                        hintText: '+92 3XX XXXXXXX',
+                        prefixIcon: Icon(Icons.phone_outlined),
                       ),
-                      validator: (v) {
-                        if (v == null || v.trim().isEmpty) {
-                          return 'Please enter your email';
-                        }
-                        final emailRegex = RegExp(
-                          r'^[\w\.\-\+]+@[\w\-]+\.[\w\.\-]+$',
-                        );
-                        if (!emailRegex.hasMatch(v.trim())) {
-                          return 'Please enter a valid email';
-                        }
-                        return null;
-                      },
+                      validator: Validators.validatePhone,
                     ),
 
                     const SizedBox(height: AppSpacing.md),

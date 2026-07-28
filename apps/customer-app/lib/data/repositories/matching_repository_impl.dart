@@ -10,6 +10,7 @@ class MatchingRepositoryImpl implements MatchingRepository {
   @override
   Future<Map<String, dynamic>> askAiAssistant({
     required String message,
+    List<Map<String, String>>? conversationHistory,
     String? city,
     String? area,
   }) async {
@@ -18,6 +19,8 @@ class MatchingRepositoryImpl implements MatchingRepository {
         '/matching/chatbot/ask',
         data: {
           'message': message,
+          if (conversationHistory != null && conversationHistory.isNotEmpty)
+            'conversationHistory': conversationHistory,
           'contextData': {
             if (city != null) 'city': city,
             if (area != null) 'area': area,

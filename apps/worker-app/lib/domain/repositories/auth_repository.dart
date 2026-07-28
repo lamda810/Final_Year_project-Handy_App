@@ -33,10 +33,10 @@ abstract class AuthRepository {
     required List<SkillModel> skills,
   });
 
-  /// Log in with [email] and [password].
+  /// Log in with [phone] and [password].
   ///
   /// Returns session info / tokens.
-  Future<Map<String, dynamic>> login(String email, String password);
+  Future<Map<String, dynamic>> login(String phone, String password);
 
   /// Initiate the forgot-password flow for [phone].
   Future<void> forgotPassword(String phone);

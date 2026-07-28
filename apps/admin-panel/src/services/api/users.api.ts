@@ -86,6 +86,27 @@ export const usersApi = {
     };
   },
 
+  createWorker: async (data: {
+    firstName: string;
+    lastName: string;
+    phone: string;
+    email?: string;
+    password: string;
+    cnic: string;
+    skills: Array<{ category: string; experience: number; hourlyRate: number }>;
+    status?: 'ACTIVE' | 'PENDING_VERIFICATION';
+  }) => {
+    const response = await apiRequest<any>('/users/admin/workers', {
+      method: 'POST',
+      body: data,
+    });
+
+    return {
+      success: true,
+      worker: response.data ? mapWorker(response.data) : null,
+    };
+  },
+
   getPendingWorkers: async () => {
     const { data } = await getData<any[]>('/users/admin/workers/pending');
     return {

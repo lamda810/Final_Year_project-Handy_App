@@ -4,6 +4,7 @@ import 'package:url_launcher/url_launcher.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/constants/app_spacing.dart';
 import '../../../core/services/location_service.dart';
+import '../../../core/utils/error_mapper.dart';
 import '../../../core/utils/string_extensions.dart';
 import '../../../core/widgets/photo_strip.dart';
 import '../../../data/models/booking_model.dart';
@@ -149,9 +150,7 @@ class _ActiveJobScreenState extends State<ActiveJobScreen> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(
-              'Failed to start job: ${e.toString().replaceAll('Exception: ', '')}',
-            ),
+            content: Text(ErrorMapper.toUserMessage(e)),
             backgroundColor: AppColors.error,
           ),
         );
@@ -208,9 +207,7 @@ class _ActiveJobScreenState extends State<ActiveJobScreen> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(
-              'Failed to complete job: ${e.toString().replaceAll('Exception: ', '')}',
-            ),
+            content: Text(ErrorMapper.toUserMessage(e)),
             backgroundColor: AppColors.error,
             duration: const Duration(seconds: 5),
           ),

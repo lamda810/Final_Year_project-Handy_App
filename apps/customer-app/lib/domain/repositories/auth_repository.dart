@@ -37,8 +37,8 @@ abstract class AuthRepository {
     required String password,
   });
 
-  /// Login with email and password
-  Future<UserModel> login({required String email, required String password});
+  /// Login with phone number and password
+  Future<UserModel> login({required String phone, required String password});
 
   /// Refresh access token
   Future<void> refreshToken();

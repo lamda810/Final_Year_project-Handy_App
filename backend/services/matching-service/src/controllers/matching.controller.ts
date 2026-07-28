@@ -126,9 +126,10 @@ export const batchUpdateTrustScores = asyncHandler(async (req: Request, res: Res
  * POST /api/matching/chatbot/ask
  */
 export const askChatbot = asyncHandler(async (req: Request, res: Response) => {
-  const { message, contextData } = req.body;
+  const { message, contextData, conversationHistory } = req.body;
+  const userRole = req.user?.role === 'WORKER' ? 'WORKER' : 'CUSTOMER';
 
-  const result = await chatbot.processChatMessage({ message, contextData });
+  const result = await chatbot.processChatMessage({ message, contextData, conversationHistory, userRole });
 
   return successResponse(res, result, 'Chatbot replied');
 });

@@ -45,6 +45,7 @@ export interface IGeoPoint {
 /**
  * Worker Document Interface
  */
+export type DocumentReviewStatus = 'pending' | 'verified' | 'rejected';
 export interface IWorker extends Document {
     _id: mongoose.Types.ObjectId;
     user: mongoose.Types.ObjectId;
@@ -58,6 +59,12 @@ export interface IWorker extends Document {
         front?: string;
         back?: string;
     };
+    cnicFrontImage?: string;
+    cnicBackImage?: string;
+    cnicFrontStatus: DocumentReviewStatus;
+    cnicBackStatus: DocumentReviewStatus;
+    profilePhotoStatus: DocumentReviewStatus;
+    verificationNotes?: string;
     skills: ISkill[];
     currentLocation?: IGeoPoint;
     serviceRadius: number;

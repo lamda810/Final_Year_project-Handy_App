@@ -29,4 +29,12 @@ export declare const cancelBooking: (req: Request, res: Response, next: import("
  * POST /api/bookings/:bookingId/rate
  */
 export declare const rateBooking: (req: Request, res: Response, next: import("express").NextFunction) => void;
+/**
+ * Request/reveal the job-start or job-end OTP for a booking, so the
+ * customer can read it aloud to the worker as proof of presence. Generates
+ * a fresh dummy code (always "123456" — see OTP.createOTP) each time it's
+ * called, same as the auth OTP flows.
+ * GET /api/bookings/:bookingId/job-otp?purpose=JOB_START|JOB_END
+ */
+export declare const getJobOtp: (req: Request, res: Response, next: import("express").NextFunction) => void;
 //# sourceMappingURL=customer.controller.d.ts.map

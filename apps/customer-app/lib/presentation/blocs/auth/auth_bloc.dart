@@ -111,7 +111,7 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
 
     try {
       final user = await _authRepository.login(
-        email: event.email,
+        phone: event.phone,
         password: event.password,
       );
       emit(Authenticated(user: user));

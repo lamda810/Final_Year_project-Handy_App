@@ -22,6 +22,13 @@ export declare const updateAvailability: (req: Request, res: Response, next: imp
 /**
  * Add document
  * POST /api/users/worker/documents
+ *
+ * `type` is one of the fixed onboarding document ids the worker-app's
+ * documents screen uses ('cnic_front' | 'cnic_back' | 'profile_photo').
+ * Each maps to its own flat image + status field (rather than only the
+ * generic `documents[]` log) so admin review can approve/reject them
+ * independently. Re-uploading resets that one document back to 'pending'
+ * so a previously-rejected document re-enters review.
  */
 export declare const addDocument: (req: Request, res: Response, next: import("express").NextFunction) => void;
 /**

@@ -80,9 +80,13 @@ otpSchema.methods.incrementAttempts = async function () {
 otpSchema.statics.createOTP = async function (phone, purpose) {
     // Invalidate any existing OTPs for this phone and purpose
     await this.invalidateOTPs(phone, purpose);
-    // Generate 6-digit OTP using cryptographically secure random
-    const { randomInt } = await import('crypto');
-    const code = randomInt(100000, 999999).toString();
+    // Fixed dummy code — this project has no working SMS provider (Twilio
+    // trial account, 5 messages/day, already exhausted) and isn't sending
+    // real OTPs to real users, so every OTP is simply "123456" instead of
+    // a randomly generated one. Not appropriate for a real deployment with
+    // real users — swap back to crypto.randomInt(100000, 999999) if a real
+    // SMS provider is ever wired up.
+    const code = '123456';
     // Calculate expiry time
     const expiresAt = new Date();
     expiresAt.setMinutes(expiresAt.getMinutes() + DEFAULTS.OTP_EXPIRY_MINUTES);

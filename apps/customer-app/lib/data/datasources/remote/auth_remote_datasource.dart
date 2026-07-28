@@ -21,7 +21,7 @@ abstract class AuthRemoteDataSource {
     required String password,
   });
 
-  Future<AuthResponse> login({required String email, required String password});
+  Future<AuthResponse> login({required String phone, required String password});
 
   Future<AuthResponse> refreshToken({required String refreshToken});
 

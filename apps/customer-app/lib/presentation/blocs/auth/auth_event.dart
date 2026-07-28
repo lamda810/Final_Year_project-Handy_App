@@ -60,15 +60,15 @@ class RegisterRequested extends AuthEvent {
   List<Object?> get props => [tempToken, firstName, lastName, phone, password];
 }
 
-/// Event to login with email and password
+/// Event to login with phone number and password
 class LoginRequested extends AuthEvent {
-  final String email;
+  final String phone;
   final String password;
 
-  const LoginRequested({required this.email, required this.password});
+  const LoginRequested({required this.phone, required this.password});
 
   @override
-  List<Object?> get props => [email, password];
+  List<Object?> get props => [phone, password];
 }
 
 /// Event to logout
