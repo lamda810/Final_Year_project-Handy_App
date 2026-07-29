@@ -256,6 +256,16 @@ class _HomeScreenState extends State<HomeScreen> {
             ),
           ),
 
+          // AI Assistant button
+          IconButton(
+            onPressed: () {
+              Navigator.of(context).pushNamed(AppRoutes.aiAssistant);
+            },
+            icon: const Icon(Icons.auto_awesome_outlined),
+            color: colorScheme.onSurface,
+            tooltip: 'AI Assistant',
+          ),
+
           // Notification button with real badge
           BlocBuilder<NotificationBloc, NotificationState>(
             builder: (context, state) {
